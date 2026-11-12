@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in TamBuys",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 255 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["freelancer", "client"] },
+        "company": { "type": "string", "maxLength": 128 },
+        "avatarUrl": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "name", "role", "createdAt"]
+    },
+    "Portal": {
+      "title": "Portal",
+      "description": "Client file portal sharing link and workspace",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "freelancerId": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 64 },
+        "clientName": { "type": "string", "maxLength": 128 },
+        "clientEmail": { "type": "string", "maxLength": 255 },
+        "projectName": { "type": "string", "maxLength": 255 },
+        "description": { "type": "string", "maxLength": 2048 },
+        "status": { "type": "string", "enum": ["active", "archived"] },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "freelancerId", "code", "clientName", "projectName", "createdAt"]
+    },
+    "FileRecord": {
+      "title": "FileRecord",
+      "description": "Metadata for uploaded project asset in vault",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "portalId": { "type": "string", "maxLength": 128 },
+        "originalName": { "type": "string", "maxLength": 255 },
+        "storedName": { "type": "string", "maxLength": 255 },
+        "mimeType": { "type": "string", "maxLength": 128 },
+        "size": { "type": "number" },
+        "uploadDate": { "type": "string", "maxLength": 64 },
+        "uploadedBy": { "type": "string", "enum": ["freelancer", "client"] },
+        "uploaderName": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 2048 },
+        "category": { "type": "string", "enum": ["image", "document", "design", "archive", "other"] },
+        "isStarred": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "originalName", "storedName", "mimeType", "size", "uploadDate", "uploadedBy", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user profile records"
+    },
+    "/portals/{portalId}": {
+      "schema": "Portal",
+      "description": "Client file portals created by designers"
+    },
+    "/files/{fileId}": {
+      "schema": "FileRecord",
+      "description": "Uploaded file metadata"
+    }
+  }
+}

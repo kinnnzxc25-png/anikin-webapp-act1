@@ -1,0 +1,134 @@
+{
+  "users": [
+    {
+      "id": "user_freelancer_1",
+      "email": "designer@tambyus.com",
+      "passwordHash": "8ebc106863bfa425eff25b7d460c83fa11f6792405b87b87d9ce1564971c32e67f1642a8bee826763bbec29bd8f395d7e19d212a4d125d744930a8db1b50dd54",
+      "salt": "b5261c8923ba37075348a385b886739b",
+      "name": "Elena Rostova",
+      "role": "freelancer",
+      "company": "Studio Rostova",
+      "avatarUrl": "/src/assets/images/avatar_designer_1794475769293.jpg",
+      "createdAt": "2026-10-01T08:00:00.000Z"
+    },
+    {
+      "id": "user_client_1",
+      "email": "client@acmelabs.io",
+      "passwordHash": "eafed6e4dff8a6f5fd396f1722b4f936ece11997ac6d3c8aa1f6e8381e1a157ff6d7509145bb6b2d4e07f47df3a5f222eb8642673f8d455481822fcaa7d4808f",
+      "salt": "986ebb7e3fd5ff5beceeeaa79c360962",
+      "name": "Marcus Vance",
+      "role": "client",
+      "company": "Acme Innovations",
+      "avatarUrl": "/src/assets/images/avatar_client_1794475781352.jpg",
+      "createdAt": "2026-10-15T09:30:00.000Z"
+    }
+  ],
+  "portals": [
+    {
+      "id": "portal_acme_1",
+      "freelancerId": "user_freelancer_1",
+      "code": "TB-ACME-2026",
+      "clientName": "Acme Innovations",
+      "clientEmail": "client@acmelabs.io",
+      "projectName": "Brand Identity & Design System",
+      "description": "Please upload vector logo variants, brand deck references, high-res photography, and approved copy.",
+      "status": "active",
+      "createdAt": "2026-10-16T10:00:00.000Z"
+    },
+    {
+      "id": "portal_launch_2",
+      "freelancerId": "user_freelancer_1",
+      "code": "TB-LAUNCH-884",
+      "clientName": "Veloce Dynamics",
+      "clientEmail": "team@velocedynamics.com",
+      "projectName": "Q4 Product Showcase Web Portal",
+      "description": "Upload 3D renders, CAD specifications, and video press releases for the upcoming launch.",
+      "status": "active",
+      "createdAt": "2026-11-01T14:20:00.000Z"
+    }
+  ],
+  "files": [
+    {
+      "id": "file_seed_1",
+      "userId": "user_freelancer_1",
+      "portalId": "portal_acme_1",
+      "originalName": "Acme_Brand_Identity_Guidelines_v2.pdf",
+      "storedName": "sample_guidelines.pdf",
+      "mimeType": "application/pdf",
+      "size": 3420800,
+      "uploadDate": "2026-11-10T11:24:00.000Z",
+      "uploadedBy": "freelancer",
+      "uploaderName": "Elena Rostova",
+      "notes": "Final revised corporate brand guidelines including color palettes & typography specs.",
+      "category": "document",
+      "isStarred": true
+    },
+    {
+      "id": "file_seed_2",
+      "userId": "user_freelancer_1",
+      "portalId": "portal_acme_1",
+      "originalName": "Vector_Master_Logo_Suite.svg",
+      "storedName": "sample_logo.svg",
+      "mimeType": "image/svg+xml",
+      "size": 485120,
+      "uploadDate": "2026-11-10T14:15:00.000Z",
+      "uploadedBy": "client",
+      "uploaderName": "Marcus Vance (Client)",
+      "notes": "Exported from Illustrator. Includes primary horizontal and stacked lockups in RGB/CMYK.",
+      "category": "image",
+      "isStarred": true
+    },
+    {
+      "id": "file_seed_3",
+      "userId": "user_freelancer_1",
+      "portalId": "portal_acme_1",
+      "originalName": "Studio_Packaging_Render_4K.png",
+      "storedName": "sample_render.png",
+      "mimeType": "image/png",
+      "size": 5120400,
+      "uploadDate": "2026-11-11T09:40:00.000Z",
+      "uploadedBy": "freelancer",
+      "uploaderName": "Elena Rostova",
+      "notes": "Photorealistic matte foil packaging preview for client sign-off before manufacturing run.",
+      "category": "image",
+      "isStarred": false
+    },
+    {
+      "id": "file_seed_4",
+      "userId": "user_freelancer_1",
+      "portalId": "portal_acme_1",
+      "originalName": "Product_Packaging_DieCut_Template.ai",
+      "storedName": "sample_diecut.ai",
+      "mimeType": "application/postscript",
+      "size": 14200300,
+      "uploadDate": "2026-11-11T16:05:00.000Z",
+      "uploadedBy": "client",
+      "uploaderName": "Marcus Vance (Client)",
+      "notes": "Supplied by printing partner. 300 DPI bleed with spot UV layers.",
+      "category": "design",
+      "isStarred": false
+    },
+    {
+      "id": "file_seed_5",
+      "userId": "user_freelancer_1",
+      "portalId": "portal_launch_2",
+      "originalName": "Typography_Editorial_Font_Package.zip",
+      "storedName": "sample_fonts.zip",
+      "mimeType": "application/zip",
+      "size": 18450000,
+      "uploadDate": "2026-11-12T04:10:00.000Z",
+      "uploadedBy": "freelancer",
+      "uploaderName": "Elena Rostova",
+      "notes": "Licensed web fonts (WOFF2 + TTF) for development handover.",
+      "category": "archive",
+      "isStarred": false
+    }
+  ],
+  "sessions": [
+    {
+      "token": "c236853e3939c8e96ab32b3269eb6f12af360e05fb992d92d3498ab59d39acd9",
+      "userId": "user_freelancer_1",
+      "createdAt": 1794476143427
+    }
+  ]
+}
