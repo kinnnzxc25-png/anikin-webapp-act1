@@ -1,11 +1,80 @@
+export type MembershipStatus = 'active' | 'pending' | 'suspended' | 'alumni';
+export type MembershipTier = 'Founding Circle' | 'Executive' | 'Patron' | 'Associate';
+export type UserRole = 'admin' | 'member' | 'freelancer' | 'client';
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'freelancer' | 'client';
+  role: UserRole;
   company: string;
+  title?: string;
+  chapter?: string;
+  membershipStatus: MembershipStatus;
+  membershipTier: MembershipTier;
+  memberNumber: string;
+  bio?: string;
+  phone?: string;
+  interests?: string[];
+  isPublicInDirectory?: boolean;
   avatarUrl?: string;
   createdAt: string;
+  joinedAt?: string;
+}
+
+export interface DirectoryMember {
+  id: string;
+  name: string;
+  company: string;
+  title: string;
+  chapter: string;
+  membershipTier: MembershipTier;
+  membershipStatus: MembershipStatus;
+  memberNumber: string;
+  bio: string;
+  interests: string[];
+  avatarUrl?: string;
+  joinedAt: string;
+}
+
+export interface MembershipApplication {
+  id: string;
+  userId: string;
+  applicantName: string;
+  applicantEmail: string;
+  company: string;
+  title: string;
+  chapter: string;
+  tierRequested: MembershipTier;
+  motivation: string;
+  referralCode?: string;
+  status: 'pending' | 'approved' | 'declined';
+  reviewNote?: string;
+  submittedAt: string;
+  reviewedAt?: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: 'Event' | 'Governance' | 'Spotlight' | 'Notice';
+  priority: 'pinned' | 'normal';
+  authorId: string;
+  authorName: string;
+  eventDate?: string;
+  location?: string;
+  publishedAt: string;
+}
+
+export interface AdminOverview {
+  totalMembers: number;
+  activeMembers: number;
+  pendingApplications: number;
+  suspendedMembers: number;
+  announcementsCount: number;
+  vaultFilesCount: number;
+  tierBreakdown: Record<MembershipTier, number>;
 }
 
 export interface StoredFile {
@@ -17,7 +86,7 @@ export interface StoredFile {
   mimeType: string;
   size: number;
   uploadDate: string;
-  uploadedBy: 'freelancer' | 'client';
+  uploadedBy: 'freelancer' | 'client' | 'member' | 'admin';
   uploaderName: string;
   notes?: string;
   category: 'image' | 'document' | 'design' | 'archive' | 'other';
@@ -77,7 +146,7 @@ export interface PublicPortalData {
     uploadDate: string;
     category: 'image' | 'document' | 'design' | 'archive' | 'other';
     uploaderName: string;
-    uploadedBy: 'freelancer' | 'client';
+    uploadedBy: 'freelancer' | 'client' | 'member' | 'admin';
     notes?: string;
   }>;
 }

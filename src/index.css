@@ -3,30 +3,53 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
-  * {
-    border-color: var(--border, theme(colors.slate.200));
+  :root {
+    --bg-canvas: #060911;
+    --bg-navy: #0A1120;
+    --bg-surface: #0F172A;
+    --accent-gold: #D4AF37;
+    --accent-gold-bright: #E7C860;
+    --border-subtle: rgba(212, 175, 55, 0.16);
   }
+
+  * {
+    border-color: rgba(148, 163, 184, 0.14);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #060911;
+    color: #F1F5F9;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #060911;
+    color: #F1F5F9;
   }
+
+  .font-display {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+
   .font-mono, .tabular-nums {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
 }
 
-/* Custom quiet scrollbars */
+/* Custom dark gold scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #060911;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(212, 175, 55, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(212, 175, 55, 0.45);
 }

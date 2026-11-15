@@ -9,7 +9,20 @@
       "role": "freelancer",
       "company": "Studio Rostova",
       "avatarUrl": "/src/assets/images/avatar_designer_1794475769293.jpg",
-      "createdAt": "2026-10-01T08:00:00.000Z"
+      "createdAt": "2026-10-01T08:00:00.000Z",
+      "membershipStatus": "active",
+      "membershipTier": "Executive",
+      "memberNumber": "BATB-010",
+      "chapter": "Manila",
+      "title": "Member",
+      "bio": "Active member of BOY'S AT THE BACK.",
+      "interests": [
+        "Private Salons",
+        "Architecture",
+        "Design"
+      ],
+      "isPublicInDirectory": true,
+      "joinedAt": "2026-10-01T08:00:00.000Z"
     },
     {
       "id": "user_client_1",
@@ -20,7 +33,232 @@
       "role": "client",
       "company": "Acme Innovations",
       "avatarUrl": "/src/assets/images/avatar_client_1794475781352.jpg",
-      "createdAt": "2026-10-15T09:30:00.000Z"
+      "createdAt": "2026-10-15T09:30:00.000Z",
+      "membershipStatus": "active",
+      "membershipTier": "Executive",
+      "memberNumber": "BATB-011",
+      "chapter": "Manila",
+      "title": "Member",
+      "bio": "Active member of BOY'S AT THE BACK.",
+      "interests": [
+        "Private Salons",
+        "Architecture",
+        "Design"
+      ],
+      "isPublicInDirectory": true,
+      "joinedAt": "2026-10-15T09:30:00.000Z"
+    },
+    {
+      "id": "user_admin_1",
+      "email": "admin@boysattheback.club",
+      "name": "Rafael Navarro",
+      "role": "admin",
+      "company": "Navarro Capital",
+      "title": "Club Chairman & Managing Partner",
+      "chapter": "Manila",
+      "membershipStatus": "active",
+      "membershipTier": "Founding Circle",
+      "memberNumber": "BATB-001",
+      "bio": "Founding chairman of BOY'S AT THE BACK. Focused on private hospitality, cross-border ventures, and cultivating enduring brotherhood among founders and creatives.",
+      "phone": "+63 917 555 0101",
+      "interests": [
+        "Private Equity",
+        "Architecture",
+        "Single Malt",
+        "Jazz"
+      ],
+      "isPublicInDirectory": true,
+      "avatarUrl": "/src/assets/images/member_founder_portrait_1794742533525.jpg",
+      "createdAt": "2025-09-01T08:00:00.000Z",
+      "joinedAt": "2025-09-01T08:00:00.000Z",
+      "passwordHash": "2f4f1c6b8b1bfd3a13e69a6027b6b8c04d4886785c00973634f4b55bc0e48f0fd8a992aaa486a639e0c00d368c155c4ff5f9f76deebb607bf1c6c4b75afd2a8b",
+      "salt": "14b3e86b2c730846dbf0f38cae8c82ef"
+    },
+    {
+      "id": "user_member_1",
+      "email": "member@boysattheback.club",
+      "name": "Julian Reyes",
+      "role": "member",
+      "company": "Monolith Atelier",
+      "title": "Principal Creative Director",
+      "chapter": "Tokyo",
+      "membershipStatus": "active",
+      "membershipTier": "Executive",
+      "memberNumber": "BATB-008",
+      "bio": "Creative director specializing in tactile brand systems, watchmaking campaigns, and spatial design across Tokyo and Manila.",
+      "phone": "+81 90 5555 0142",
+      "interests": [
+        "Industrial Design",
+        "Horology",
+        "Vinyl",
+        "Editorial Print"
+      ],
+      "isPublicInDirectory": true,
+      "avatarUrl": "/src/assets/images/member_director_portrait_1794742533514.jpg",
+      "createdAt": "2026-01-12T10:00:00.000Z",
+      "joinedAt": "2026-01-15T12:00:00.000Z",
+      "passwordHash": "e6cb659f18cc28f9b3424430cfc45d784542b2123fff7fb1c637540cfe06796b8649f1ee1b6ced94d286b612424ea2f4186278e8516c2f636dd30819943281ec",
+      "salt": "eecc184ac588ba124fc64b10b13bc1d6"
+    },
+    {
+      "id": "user_member_2",
+      "email": "architect@boysattheback.club",
+      "name": "Arthur Sterling",
+      "role": "member",
+      "company": "Sterling & Co. Studio",
+      "title": "Founding Architect",
+      "chapter": "London",
+      "membershipStatus": "active",
+      "membershipTier": "Founding Circle",
+      "memberNumber": "BATB-003",
+      "bio": "Designing private residences, listening rooms, and boutique members lounges across Europe and Southeast Asia.",
+      "phone": "+44 7700 900123",
+      "interests": [
+        "Brutalist Architecture",
+        "Bespoke Tailoring",
+        "Fine Art"
+      ],
+      "isPublicInDirectory": true,
+      "avatarUrl": "/src/assets/images/member_architect_portrait_1794742535069.jpg",
+      "createdAt": "2025-10-04T09:00:00.000Z",
+      "joinedAt": "2025-10-06T09:00:00.000Z",
+      "passwordHash": "ae1f0a92111b418c61d61f088d2e8886ef4819f104ffe1eb303732aef8087ba42be29e2149871a32d5fa64d899cbaa8eb68abea97a5cab927df5e25a7bacf898",
+      "salt": "2055481a6da256becb16cc05deb2ad19"
+    },
+    {
+      "id": "user_pending_1",
+      "email": "applicant@horizon.co",
+      "name": "Dante Alcaraz",
+      "role": "member",
+      "company": "Horizon Partners",
+      "title": "Venture Partner",
+      "chapter": "Manila",
+      "membershipStatus": "pending",
+      "membershipTier": "Executive",
+      "memberNumber": "BATB-PEND",
+      "bio": "Early-stage investor backing design-led consumer brands and fintech founders in Southeast Asia.",
+      "phone": "+63 917 555 0884",
+      "interests": [
+        "Venture Capital",
+        "Contemporary Art",
+        "Espresso"
+      ],
+      "isPublicInDirectory": false,
+      "createdAt": "2026-11-12T08:00:00.000Z",
+      "passwordHash": "3fa4bec3ba6d02d34dcbf734d82131ba2b755d49c8ebcab54ef912b78ce748bc3ae38cb20bfb6a9ab6fbe41fe03c546220b31635ab87dad59137994a5f8c1112",
+      "salt": "d89ad8aad3b491e22228655522cac600"
+    },
+    {
+      "id": "user_1794743011316_93acabd0",
+      "email": "verify_1794743011291@example.com",
+      "passwordHash": "204d1a13e8e225795bce11d1c54dc80a0da7945a0a2f2bb7112fbd702b7dda01a92e12e2179bbdad109d90840b4e5df24429346a7f9f802f1d936000172f537c",
+      "salt": "2d0ba50d524ff5ce5d1ffed7fb8b075d",
+      "name": "Test Applicant",
+      "role": "member",
+      "company": "Studio Verify",
+      "title": "Founder",
+      "chapter": "Tokyo",
+      "membershipStatus": "pending",
+      "membershipTier": "Executive",
+      "memberNumber": "BATB-PEND",
+      "bio": "Testing registration flow",
+      "interests": [
+        "Networking",
+        "Private Salons"
+      ],
+      "isPublicInDirectory": false,
+      "createdAt": "2026-11-15T11:43:31.316Z"
+    }
+  ],
+  "applications": [
+    {
+      "id": "app_1794743011367_a3165d",
+      "userId": "user_1794743011316_93acabd0",
+      "applicantName": "Test Applicant",
+      "applicantEmail": "verify_1794743011291@example.com",
+      "company": "Studio Verify",
+      "title": "Founder",
+      "chapter": "Tokyo",
+      "tierRequested": "Executive",
+      "motivation": "Testing registration flow",
+      "status": "pending",
+      "submittedAt": "2026-11-15T11:43:31.316Z"
+    },
+    {
+      "id": "app_seed_1",
+      "userId": "user_pending_1",
+      "applicantName": "Dante Alcaraz",
+      "applicantEmail": "applicant@horizon.co",
+      "company": "Horizon Partners",
+      "title": "Venture Partner",
+      "chapter": "Manila",
+      "tierRequested": "Executive",
+      "motivation": "Looking to connect with fellow founders and creative directors in the Manila and Singapore chapters for off-the-record founder dinners and collaborative studio salons.",
+      "referralCode": "BATB-001",
+      "status": "pending",
+      "submittedAt": "2026-11-12T08:00:00.000Z"
+    },
+    {
+      "id": "app_seed_2",
+      "userId": "user_member_1",
+      "applicantName": "Julian Reyes",
+      "applicantEmail": "member@boysattheback.club",
+      "company": "Monolith Atelier",
+      "title": "Principal Creative Director",
+      "chapter": "Tokyo",
+      "tierRequested": "Executive",
+      "motivation": "Collaborating with architectural and venture members across Tokyo and Manila.",
+      "referralCode": "BATB-003",
+      "status": "approved",
+      "reviewNote": "Vouched by Arthur Sterling. Welcomed to Tokyo Chapter.",
+      "submittedAt": "2026-01-12T10:00:00.000Z",
+      "reviewedAt": "2026-01-15T12:00:00.000Z"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ann_seed_1",
+      "title": "Annual Black-Tie Supper & Founders' Salon",
+      "content": "Join Founding Circle and Executive members for an evening of private dining, off-the-record roundtables, and live quartet jazz in the backroom library. Dress code: Midnight navy or black tie.",
+      "category": "Event",
+      "priority": "pinned",
+      "authorId": "user_admin_1",
+      "authorName": "Rafael Navarro",
+      "eventDate": "Dec 04, 2026 · 8:00 PM",
+      "location": "The Backroom Lounge, Makati / Manila",
+      "publishedAt": "2026-11-14T18:00:00.000Z"
+    },
+    {
+      "id": "ann_seed_2",
+      "title": "2027 Member Charter & Global Chapter Reciprocity",
+      "content": "Effective January 2027, active members in good standing receive seamless reciprocal lounge privileges across Manila, Tokyo, Singapore, London, and New York chapters. Digital member credentials are now active in your Profile tab.",
+      "category": "Governance",
+      "priority": "pinned",
+      "authorId": "user_admin_1",
+      "authorName": "Rafael Navarro",
+      "publishedAt": "2026-11-11T10:30:00.000Z"
+    },
+    {
+      "id": "ann_seed_3",
+      "title": "Tokyo Chapter: Late-Night Listening & Rare Vintage Tasting",
+      "content": "Hosted by Julian Reyes at our Aoyama listening room. Limited to 18 seated places for members and one accompanied guest. Please review the briefing notes in the Member Vault.",
+      "category": "Event",
+      "priority": "normal",
+      "authorId": "user_admin_1",
+      "authorName": "Rafael Navarro",
+      "eventDate": "Nov 28, 2026 · 9:30 PM",
+      "location": "Aoyama Listening Room, Tokyo",
+      "publishedAt": "2026-11-09T14:15:00.000Z"
+    },
+    {
+      "id": "ann_seed_4",
+      "title": "Member Spotlight: Sterling & Co. Opens Kyoto Pavilion",
+      "content": "Congratulations to Founding Circle member Arthur Sterling on unveiling the Kyoto timber & basalt tea pavilion. Private architectural walkthrough available for visiting members through December.",
+      "category": "Spotlight",
+      "priority": "normal",
+      "authorId": "user_admin_1",
+      "authorName": "Rafael Navarro",
+      "publishedAt": "2026-11-05T09:00:00.000Z"
     }
   ],
   "portals": [
@@ -129,6 +367,21 @@
       "token": "c236853e3939c8e96ab32b3269eb6f12af360e05fb992d92d3498ab59d39acd9",
       "userId": "user_freelancer_1",
       "createdAt": 1794476143427
+    },
+    {
+      "token": "fe461cd7dbb87feb919dea8be321d33d30f5f2fadcd1124f59f4f0d60fa66b0e",
+      "userId": "user_admin_1",
+      "createdAt": 1794743011225
+    },
+    {
+      "token": "2870db069c7084a5a9f46cb7003e1b3a06fb7a4d5e56ca1c36161b55df0213e4",
+      "userId": "user_member_1",
+      "createdAt": 1794743011288
+    },
+    {
+      "token": "1c4c745706306a023a614ba5c4b42a98ba081fd1e3740691c9ba26adfd5ccd2a",
+      "userId": "user_1794743011316_93acabd0",
+      "createdAt": 1794743011367
     }
   ]
 }

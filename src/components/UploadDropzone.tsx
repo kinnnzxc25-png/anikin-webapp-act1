@@ -6,9 +6,7 @@ import {
   UploadCloud,
   File,
   X,
-  CheckCircle2,
   AlertCircle,
-  FolderOpen,
   Send,
   Loader2,
 } from 'lucide-react';
@@ -51,20 +49,21 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      addFiles(Array.from(e.dataTransfer.files));
+    const droppedList = e.dataTransfer.files;
+    if (droppedList && droppedList.length > 0) {
+      addFiles(Array.from(droppedList));
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      addFiles(Array.from(e.target.files));
+    const fileList = e.target.files;
+    if (fileList && fileList.length > 0) {
+      addFiles(Array.from(fileList));
     }
   };
 
   const addFiles = (newFiles: File[]) => {
     setError(null);
-    // filter duplicates
     setSelectedFiles((prev) => {
       const existingNames = new Set(prev.map((f) => f.name + f.size));
       const filtered = newFiles.filter((f) => !existingNames.has(f.name + f.size));
@@ -100,7 +99,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
         setNotes('');
         setUploading(false);
         if (onClose) onClose();
-      }, 400);
+      }, 300);
     } catch (err: any) {
       clearInterval(timer);
       setUploading(false);
@@ -109,20 +108,20 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6">
+    <div className="bg-[#0A1120] rounded-2xl border border-[#D4AF37]/25 shadow-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-            Upload Client Files
+          <h2 className="text-sm font-bold text-white tracking-tight">
+            Upload to Member Vault
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Files are encrypted and safely stored in your isolated workspace.
+          <p className="text-xs text-slate-400 mt-0.5">
+            Files are encrypted and stored inside your isolated member vault.
           </p>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -130,13 +129,12 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+        <div className="mb-4 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Drag & Drop Canvas */}
       <div
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
@@ -145,8 +143,8 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
         onClick={() => fileInputRef.current?.click()}
         className={`relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
           dragActive
-            ? 'border-blue-600 bg-blue-50/50 scale-[0.99]'
-            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60 bg-slate-50/30'
+            ? 'border-[#D4AF37] bg-[#D4AF37]/10 scale-[0.99]'
+            : 'border-slate-700 hover:border-[#D4AF37]/50 bg-[#060911]/60'
         }`}
       >
         <input
@@ -158,27 +156,26 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
         />
 
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#0A1120] border border-[#D4AF37]/30 text-[#E7C860] flex items-center justify-center mb-3">
             <UploadCloud className="w-6 h-6" />
           </div>
 
-          <div className="text-xs font-semibold text-slate-800">
+          <div className="text-xs font-semibold text-white">
             Click to upload or drag & drop files here
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-[11px] text-slate-400 mt-1">
             Supports PDF, AI, PSD, PNG, SVG, ZIP, Docs up to 100MB per file
           </div>
         </div>
       </div>
 
-      {/* Selected Files Queue */}
       {selectedFiles.length > 0 && (
         <div className="mt-4 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-600">
-            <span className="font-semibold text-slate-800">
+          <div className="flex items-center justify-between text-xs text-slate-300">
+            <span className="font-semibold text-white">
               Selected files ({selectedFiles.length})
             </span>
-            <span className="font-mono tabular-nums text-slate-500">
+            <span className="font-mono tabular-nums text-[#E7C860]">
               Total: {formatBytes(totalSize)}
             </span>
           </div>
@@ -187,11 +184,11 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
             {selectedFiles.map((f, i) => (
               <div
                 key={`${f.name}-${i}`}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-[#060911] border border-slate-800 text-xs"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <File className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="font-medium text-slate-800 truncate">
+                  <File className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                  <span className="font-medium text-white truncate">
                     {f.name}
                   </span>
                   <span className="text-[11px] text-slate-400 shrink-0 font-mono tabular-nums">
@@ -205,7 +202,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
                       e.stopPropagation();
                       removeFile(i);
                     }}
-                    className="p-1 text-slate-400 hover:text-red-500 rounded-md transition-colors cursor-pointer"
+                    className="p-1 text-slate-400 hover:text-rose-400 rounded-md transition-colors cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -214,19 +211,18 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
             ))}
           </div>
 
-          {/* Project & Notes Options */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                Assign to Client Portal <span className="text-slate-400 font-normal">(Optional)</span>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Assign to Drop Portal <span className="text-slate-500 font-normal">(Optional)</span>
               </label>
               <select
                 value={portalId}
                 onChange={(e) => setPortalId(e.target.value)}
                 disabled={uploading}
-                className="w-full text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="w-full text-xs py-2 px-2.5 bg-[#060911] border border-slate-800 text-slate-100 rounded-xl focus:outline-none focus:border-[#D4AF37]"
               >
-                <option value="">No specific portal (General Vault)</option>
+                <option value="">General Member Vault</option>
                 {portals.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.projectName} ({p.clientName})
@@ -236,47 +232,45 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                Upload Note / Description <span className="text-slate-400 font-normal">(Optional)</span>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Upload Note <span className="text-slate-500 font-normal">(Optional)</span>
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 disabled={uploading}
-                placeholder="e.g. Final approved vector assets"
-                className="w-full text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600"
+                placeholder="e.g. Chapter charter & briefing PDF"
+                className="w-full text-xs py-2 px-2.5 bg-[#060911] border border-slate-800 text-slate-100 rounded-xl focus:outline-none focus:border-[#D4AF37]"
               />
             </div>
           </div>
 
-          {/* Upload Progress Bar */}
           {uploading && (
             <div className="pt-2">
-              <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
+              <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
                 <span className="flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                  Uploading and encrypting files...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4AF37]" />
+                  Uploading to Member Vault...
                 </span>
-                <span className="font-mono tabular-nums">{uploadProgress}%</span>
+                <span className="font-mono tabular-nums text-[#E7C860]">{uploadProgress}%</span>
               </div>
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  className="h-full bg-[#D4AF37] rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
             </div>
           )}
 
-          {/* Upload Submit Action */}
           <div className="flex items-center justify-end gap-2 pt-2">
             {onClose && (
               <button
                 type="button"
                 onClick={onClose}
                 disabled={uploading}
-                className="py-2 px-3 text-xs font-medium text-slate-600 hover:text-slate-800 rounded-xl transition-colors cursor-pointer"
+                className="py-2 px-3 text-xs font-medium text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -285,7 +279,7 @@ export const UploadDropzone: React.FC<UploadDropzoneProps> = ({
               type="button"
               onClick={handleUpload}
               disabled={uploading}
-              className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              className="py-2 px-4 bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
               <Send className="w-3.5 h-3.5" />
               <span>

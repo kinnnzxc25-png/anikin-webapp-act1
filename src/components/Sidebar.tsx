@@ -1,208 +1,237 @@
 import React from 'react';
-import { User, DashboardStats } from '../types';
+import { User } from '../types';
 import {
-  FolderOpen,
-  Share2,
-  HardDrive,
+  LayoutDashboard,
+  Megaphone,
+  Users,
+  UserCircle,
+  FolderLock,
+  Shield,
   LogOut,
-  Sparkles,
-  ExternalLink,
-  PlusCircle,
-  FileCheck2,
+  X,
 } from 'lucide-react';
+
+export type DashboardTab =
+  | 'overview'
+  | 'announcements'
+  | 'directory'
+  | 'profile'
+  | 'vault'
+  | 'admin';
 
 interface SidebarProps {
   user: User;
-  activeTab: 'files' | 'portals' | 'storage';
-  setActiveTab: (tab: 'files' | 'portals' | 'storage') => void;
-  stats: DashboardStats | null;
+  activeTab: DashboardTab;
+  setActiveTab: (tab: DashboardTab) => void;
+  pendingCount: number;
+  announcementsCount: number;
   onSignOut: () => void;
-  onOpenUpload: () => void;
-  onOpenCreatePortal: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   user,
   activeTab,
   setActiveTab,
-  stats,
+  pendingCount,
+  announcementsCount,
   onSignOut,
-  onOpenUpload,
-  onOpenCreatePortal,
+  mobileOpen,
+  onCloseMobile,
 }) => {
-  const percentage = stats ? parseFloat(stats.quotaPercentage) : 1.2;
+  const navItems: Array<{
+    id: DashboardTab;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+    adminOnly?: boolean;
+  }> = [
+    {
+      id: 'overview',
+      label: 'Member Dashboard',
+      icon: <LayoutDashboard className="w-4 h-4" />,
+    },
+    {
+      id: 'announcements',
+      label: 'Announcements',
+      icon: <Megaphone className="w-4 h-4" />,
+      badge: announcementsCount > 0 ? announcementsCount : undefined,
+    },
+    {
+      id: 'directory',
+      label: 'Member Directory',
+      icon: <Users className="w-4 h-4" />,
+    },
+    {
+      id: 'profile',
+      label: 'Profile & Status',
+      icon: <UserCircle className="w-4 h-4" />,
+    },
+    {
+      id: 'vault',
+      label: 'Member Vault',
+      icon: <FolderLock className="w-4 h-4" />,
+    },
+    {
+      id: 'admin',
+      label: 'Admin Dashboard',
+      icon: <Shield className="w-4 h-4" />,
+      badge: pendingCount > 0 ? pendingCount : undefined,
+      adminOnly: true,
+    },
+  ];
 
-  return (
-    <aside className="w-64 bg-[#0B1528] text-slate-300 flex flex-col shrink-0 h-screen border-r border-[#15233e] select-none">
-      {/* Top Brand Zone */}
-      <div className="p-5 border-b border-[#182643] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm ring-1 ring-white/20">
-            <svg
-              className="w-5 h-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 7h-7" />
-              <path d="M14 17H5" />
-              <circle cx="17" cy="17" r="3" />
-              <circle cx="7" cy="7" r="3" />
-            </svg>
+  const handleSelect = (tab: DashboardTab) => {
+    setActiveTab(tab);
+    onCloseMobile();
+  };
+
+  const statusColor =
+    user.membershipStatus === 'active'
+      ? 'text-emerald-400'
+      : user.membershipStatus === 'pending'
+      ? 'text-amber-400'
+      : 'text-rose-400';
+
+  const statusLabel =
+    user.membershipStatus === 'active'
+      ? 'Active Member'
+      : user.membershipStatus === 'pending'
+      ? 'Pending Review'
+      : user.membershipStatus === 'alumni'
+      ? 'Alumni'
+      : 'Suspended';
+
+  const sidebarContent = (
+    <aside className="w-68 bg-[#060911] text-slate-300 flex flex-col h-full border-r border-[#D4AF37]/15 select-none">
+      {/* Brand Header */}
+      <div className="px-5 py-5 border-b border-[#D4AF37]/15 flex items-center justify-between">
+        <div>
+          <div className="font-display text-base font-semibold tracking-[0.14em] text-[#E7C860] leading-tight">
+            BOY'S AT THE BACK
           </div>
-          <div>
-            <div className="text-base font-bold text-white tracking-tight leading-none">
-              TamBuys
-            </div>
-            <div className="text-[11px] text-slate-400 mt-1">Client File Portal</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            An Exclusive Community
           </div>
+        </div>
+
+        <button
+          onClick={onCloseMobile}
+          aria-label="Close sidebar"
+          className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/70 cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Member Credential Strip */}
+      <div className="mx-4 mt-4 p-3.5 rounded-xl bg-[#0A1120] border border-[#D4AF37]/20">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="font-mono text-[#E7C860] font-semibold tabular-nums">
+            {user.memberNumber}
+          </span>
+          <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+        </div>
+        <div className="text-xs font-semibold text-white mt-1 truncate">
+          {user.membershipTier}
+        </div>
+        <div className="text-[11px] text-slate-400 mt-0.5">
+          {user.chapter || 'Manila'} Chapter
         </div>
       </div>
 
-      {/* Primary Action Button */}
-      <div className="p-4">
-        <button
-          onClick={onOpenUpload}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Upload Files</span>
-        </button>
-      </div>
-
-      {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-2 space-y-1">
-        <button
-          onClick={() => setActiveTab('files')}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-            activeTab === 'files'
-              ? 'bg-slate-800/90 text-white shadow-inner font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <FolderOpen className={`w-4 h-4 ${activeTab === 'files' ? 'text-blue-400' : 'text-slate-400'}`} />
-            <span>Files & Assets</span>
-          </div>
-          {stats && (
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 tabular-nums">
-              {stats.totalFiles}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('portals')}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-            activeTab === 'portals'
-              ? 'bg-slate-800/90 text-white shadow-inner font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <Share2 className={`w-4 h-4 ${activeTab === 'portals' ? 'text-blue-400' : 'text-slate-400'}`} />
-            <span>Client Portals</span>
-          </div>
-          {stats && (
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 tabular-nums">
-              {stats.portalCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('storage')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-            activeTab === 'storage'
-              ? 'bg-slate-800/90 text-white shadow-inner font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-          }`}
-        >
-          <HardDrive className={`w-4 h-4 ${activeTab === 'storage' ? 'text-blue-400' : 'text-slate-400'}`} />
-          <span>Storage & Activity</span>
-        </button>
-
-        {/* Quick Portal Creator for Freelancers */}
-        {user.role === 'freelancer' && (
-          <div className="pt-4 px-1">
-            <div className="p-3 rounded-xl bg-[#101b33] border border-[#1b2b4f]">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-white mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                <span>Client Drop Link</span>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed mb-2.5">
-                Create a secure upload link for a client project.
-              </p>
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {navItems
+          .filter((item) => !item.adminOnly || user.role === 'admin')
+          .map((item) => {
+            const isActive = activeTab === item.id;
+            return (
               <button
-                onClick={onOpenCreatePortal}
-                className="w-full py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg text-[11px] font-medium border border-slate-700/80 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                key={item.id}
+                onClick={() => handleSelect(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-[#0A1120] text-[#E7C860] border border-[#D4AF37]/30 font-semibold'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-[#0A1120]/60 border border-transparent'
+                }`}
               >
-                <span>+ New Portal Link</span>
+                <span className="flex items-center gap-2.5">
+                  <span className={isActive ? 'text-[#D4AF37]' : 'text-slate-500'}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
+                </span>
+                {item.badge !== undefined && (
+                  <span
+                    className={`font-mono text-[11px] px-1.5 py-0.5 rounded tabular-nums ${
+                      item.id === 'admin'
+                        ? 'bg-[#D4AF37] text-[#060911] font-bold'
+                        : 'bg-slate-800 text-slate-300'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
               </button>
-            </div>
-          </div>
-        )}
+            );
+          })}
       </nav>
 
-      {/* Storage Quota Usage Meter */}
-      <div className="p-4 mx-3 mb-3 bg-[#101b33] border border-[#182643] rounded-xl">
-        <div className="flex items-center justify-between text-xs mb-1.5">
-          <span className="text-slate-300 font-medium">Vault Storage</span>
-          <span className="font-mono text-slate-400 text-[11px] tabular-nums">
-            {stats ? stats.totalBytesFormatted : '41.8 MB'} / 2.0 GB
-          </span>
-        </div>
-        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-500"
-            style={{ width: `${Math.max(percentage, 3)}%` }}
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-          <span className="flex items-center gap-1">
-            <FileCheck2 className="w-3 h-3 text-emerald-400" />
-            Active Vault
-          </span>
-          <span className="tabular-nums font-mono">{percentage}% used</span>
-        </div>
-      </div>
-
-      {/* User Profile Card & Sign Out */}
-      <div className="p-3 border-t border-[#182643] bg-[#091122]">
+      {/* Bottom User Card */}
+      <div className="p-3.5 border-t border-[#D4AF37]/15 bg-[#04060B]">
         <div className="flex items-center gap-3">
           {user.avatarUrl ? (
             <img
               src={user.avatarUrl}
               alt={user.name}
-              className="w-9 h-9 rounded-full object-cover ring-1 ring-slate-700"
+              referrerPolicy="no-referrer"
+              className="w-9 h-9 rounded-full object-cover ring-1 ring-[#D4AF37]/40 shrink-0"
             />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center font-semibold text-xs ring-1 ring-slate-700">
+            <div className="w-9 h-9 rounded-full bg-[#0A1120] text-[#E7C860] flex items-center justify-center font-semibold text-xs ring-1 ring-[#D4AF37]/40 shrink-0">
               {user.name.charAt(0)}
             </div>
           )}
 
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-white truncate leading-tight">
+            <div className="text-xs font-semibold text-white truncate">
               {user.name}
             </div>
-            <div className="text-[11px] text-slate-400 truncate mt-0.5">
-              {user.company || (user.role === 'freelancer' ? 'Freelance Studio' : 'Client')}
+            <div className="text-[11px] text-slate-400 truncate">
+              {user.role === 'admin' ? 'Club Administrator' : user.company || 'Member'}
             </div>
           </div>
 
           <button
             onClick={onSignOut}
             title="Sign Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800/80 transition-colors cursor-pointer"
+            aria-label="Sign Out"
+            className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-[#0A1120] transition-colors cursor-pointer shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop Fixed Sidebar */}
+      <div className="hidden lg:block h-screen shrink-0">{sidebarContent}</div>
+
+      {/* Mobile Slide-Over Drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            onClick={onCloseMobile}
+            className="fixed inset-0 bg-black/70 backdrop-blur-xs"
+          />
+          <div className="relative z-10 h-full">{sidebarContent}</div>
+        </div>
+      )}
+    </>
   );
 };

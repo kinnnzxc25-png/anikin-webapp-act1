@@ -2,22 +2,70 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile in TamBuys",
+      "description": "Member profile and account in BOY'S AT THE BACK",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "email": { "type": "string", "maxLength": 255 },
         "name": { "type": "string", "maxLength": 128 },
-        "role": { "type": "string", "enum": ["freelancer", "client"] },
+        "role": { "type": "string", "enum": ["admin", "member", "freelancer", "client"] },
         "company": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "chapter": { "type": "string", "maxLength": 64 },
+        "membershipStatus": { "type": "string", "enum": ["active", "pending", "suspended", "alumni"] },
+        "membershipTier": { "type": "string", "enum": ["Founding Circle", "Executive", "Patron", "Associate"] },
+        "memberNumber": { "type": "string", "maxLength": 32 },
+        "bio": { "type": "string", "maxLength": 2048 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "isPublicInDirectory": { "type": "boolean" },
         "avatarUrl": { "type": "string", "maxLength": 512 },
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "email", "name", "role", "createdAt"]
     },
+    "MembershipApplication": {
+      "title": "MembershipApplication",
+      "description": "Membership registration application awaiting or completed admin review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "applicantName": { "type": "string", "maxLength": 128 },
+        "applicantEmail": { "type": "string", "maxLength": 255 },
+        "company": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "chapter": { "type": "string", "maxLength": 64 },
+        "tierRequested": { "type": "string", "enum": ["Founding Circle", "Executive", "Patron", "Associate"] },
+        "motivation": { "type": "string", "maxLength": 2048 },
+        "referralCode": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["pending", "approved", "declined"] },
+        "reviewNote": { "type": "string", "maxLength": 1024 },
+        "submittedAt": { "type": "string", "maxLength": 64 },
+        "reviewedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "applicantName", "applicantEmail", "tierRequested", "status", "submittedAt"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Community announcements, private events, and governance notices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 255 },
+        "content": { "type": "string", "maxLength": 4096 },
+        "category": { "type": "string", "enum": ["Event", "Governance", "Spotlight", "Notice"] },
+        "priority": { "type": "string", "enum": ["pinned", "normal"] },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "eventDate": { "type": "string", "maxLength": 64 },
+        "location": { "type": "string", "maxLength": 255 },
+        "publishedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "title", "content", "category", "priority", "authorId", "publishedAt"]
+    },
     "Portal": {
       "title": "Portal",
-      "description": "Client file portal sharing link and workspace",
+      "description": "Shared member/client file drop portal",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -34,7 +82,7 @@
     },
     "FileRecord": {
       "title": "FileRecord",
-      "description": "Metadata for uploaded project asset in vault",
+      "description": "Metadata for uploaded asset in member vault",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -45,7 +93,7 @@
         "mimeType": { "type": "string", "maxLength": 128 },
         "size": { "type": "number" },
         "uploadDate": { "type": "string", "maxLength": 64 },
-        "uploadedBy": { "type": "string", "enum": ["freelancer", "client"] },
+        "uploadedBy": { "type": "string", "enum": ["freelancer", "client", "member", "admin"] },
         "uploaderName": { "type": "string", "maxLength": 128 },
         "notes": { "type": "string", "maxLength": 2048 },
         "category": { "type": "string", "enum": ["image", "document", "design", "archive", "other"] },
@@ -57,11 +105,19 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Individual user profile records"
+      "description": "Member profiles and status"
+    },
+    "/applications/{applicationId}": {
+      "schema": "MembershipApplication",
+      "description": "Membership applications for review"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Community announcements and events"
     },
     "/portals/{portalId}": {
       "schema": "Portal",
-      "description": "Client file portals created by designers"
+      "description": "Shared drop portals"
     },
     "/files/{fileId}": {
       "schema": "FileRecord",

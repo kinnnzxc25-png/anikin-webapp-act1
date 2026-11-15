@@ -7,7 +7,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 // Directories setup
 const DATA_DIR = path.resolve('data');
@@ -27,13 +27,14 @@ if (fs.existsSync(FIREBASE_CONFIG_FILE)) {
   }
 }
 
-// Firestore async sync helper
+// Firestore async sync helpers
 async function syncToFirestore(collectionName: string, id: string, data: any) {
   if (!firestoreDb) return;
   try {
-    await setDoc(doc(firestoreDb, collectionName, id), data, { merge: true });
-  } catch (e) {
-    // Keep local operation going even if network has brief latency
+    const cleanData = JSON.parse(JSON.stringify(data));
+    await setDoc(doc(firestoreDb, collectionName, id), cleanData, { merge: true });
+  } catch {
+    // Non-blocking sync
   }
 }
 
@@ -41,8 +42,8 @@ async function deleteFromFirestore(collectionName: string, id: string) {
   if (!firestoreDb) return;
   try {
     await deleteDoc(doc(firestoreDb, collectionName, id));
-  } catch (e) {
-    // non-blocking
+  } catch {
+    // Non-blocking
   }
 }
 
@@ -67,29 +68,73 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  limits: { fileSize: 100 * 1024 * 1024 },
 });
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Types
+export type MembershipStatus = 'active' | 'pending' | 'suspended' | 'alumni';
+export type MembershipTier = 'Founding Circle' | 'Executive' | 'Patron' | 'Associate';
+export type UserRole = 'admin' | 'member' | 'freelancer' | 'client';
+
 export interface User {
   id: string;
   email: string;
   passwordHash: string;
   salt: string;
   name: string;
-  role: 'freelancer' | 'client';
+  role: UserRole;
   company: string;
+  title?: string;
+  chapter?: string;
+  membershipStatus: MembershipStatus;
+  membershipTier: MembershipTier;
+  memberNumber: string;
+  bio?: string;
+  phone?: string;
+  interests?: string[];
+  isPublicInDirectory?: boolean;
   avatarUrl?: string;
   createdAt: string;
+  joinedAt?: string;
+}
+
+export interface MembershipApplication {
+  id: string;
+  userId: string;
+  applicantName: string;
+  applicantEmail: string;
+  company: string;
+  title: string;
+  chapter: string;
+  tierRequested: MembershipTier;
+  motivation: string;
+  referralCode?: string;
+  status: 'pending' | 'approved' | 'declined';
+  reviewNote?: string;
+  submittedAt: string;
+  reviewedAt?: string;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: 'Event' | 'Governance' | 'Spotlight' | 'Notice';
+  priority: 'pinned' | 'normal';
+  authorId: string;
+  authorName: string;
+  eventDate?: string;
+  location?: string;
+  publishedAt: string;
 }
 
 export interface ClientPortal {
   id: string;
   freelancerId: string;
-  code: string; // e.g. 'TB-ACME-2026'
+  code: string;
   clientName: string;
   clientEmail: string;
   projectName: string;
@@ -100,14 +145,14 @@ export interface ClientPortal {
 
 export interface StoredFile {
   id: string;
-  userId: string; // owner (freelancer)
-  portalId?: string; // portal associated if any
+  userId: string;
+  portalId?: string;
   originalName: string;
   storedName: string;
   mimeType: string;
   size: number;
   uploadDate: string;
-  uploadedBy: 'freelancer' | 'client';
+  uploadedBy: 'freelancer' | 'client' | 'member' | 'admin';
   uploaderName: string;
   notes?: string;
   category: 'image' | 'document' | 'design' | 'archive' | 'other';
@@ -122,12 +167,14 @@ export interface Session {
 
 interface DatabaseSchema {
   users: User[];
+  applications: MembershipApplication[];
+  announcements: Announcement[];
   portals: ClientPortal[];
   files: StoredFile[];
   sessions: Session[];
 }
 
-// Helper: Password hashing
+// Helpers
 function hashPassword(password: string, salt: string): string {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
@@ -135,6 +182,11 @@ function hashPassword(password: string, salt: string): string {
 function verifyPassword(password: string, hash: string, salt: string): boolean {
   const check = hashPassword(password, salt);
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
+}
+
+function sanitizeUser(user: User) {
+  const { passwordHash: _, salt: __, ...safeUser } = user;
+  return safeUser;
 }
 
 function determineCategory(filename: string, mimeType: string): 'image' | 'document' | 'design' | 'archive' | 'other' {
@@ -154,161 +206,305 @@ function determineCategory(filename: string, mimeType: string): 'image' | 'docum
   return 'other';
 }
 
-// Seed initial state
-function initDatabase(): DatabaseSchema {
-  if (fs.existsSync(DB_FILE)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-      if (data.users && data.files) return data;
-    } catch {
-      // fallback
-    }
-  }
+function buildSeedUsers(): User[] {
+  const mkUser = (
+    partial: Omit<User, 'passwordHash' | 'salt'>
+  ): User => {
+    const salt = crypto.randomBytes(16).toString('hex');
+    return {
+      ...partial,
+      passwordHash: hashPassword('password123', salt),
+      salt,
+    };
+  };
 
-  const salt1 = crypto.randomBytes(16).toString('hex');
-  const salt2 = crypto.randomBytes(16).toString('hex');
-
-  const freelancerId = 'user_freelancer_1';
-  const clientId = 'user_client_1';
-
-  const initialUsers: User[] = [
-    {
-      id: freelancerId,
+  return [
+    mkUser({
+      id: 'user_admin_1',
+      email: 'admin@boysattheback.club',
+      name: 'Rafael Navarro',
+      role: 'admin',
+      company: 'Navarro Capital',
+      title: 'Club Chairman & Managing Partner',
+      chapter: 'Manila',
+      membershipStatus: 'active',
+      membershipTier: 'Founding Circle',
+      memberNumber: 'BATB-001',
+      bio: 'Founding chairman of BOY\'S AT THE BACK. Focused on private hospitality, cross-border ventures, and cultivating enduring brotherhood among founders and creatives.',
+      phone: '+63 917 555 0101',
+      interests: ['Private Equity', 'Architecture', 'Single Malt', 'Jazz'],
+      isPublicInDirectory: true,
+      avatarUrl: '/src/assets/images/member_founder_portrait_1794742533525.jpg',
+      createdAt: '2025-09-01T08:00:00.000Z',
+      joinedAt: '2025-09-01T08:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_member_1',
+      email: 'member@boysattheback.club',
+      name: 'Julian Reyes',
+      role: 'member',
+      company: 'Monolith Atelier',
+      title: 'Principal Creative Director',
+      chapter: 'Tokyo',
+      membershipStatus: 'active',
+      membershipTier: 'Executive',
+      memberNumber: 'BATB-008',
+      bio: 'Creative director specializing in tactile brand systems, watchmaking campaigns, and spatial design across Tokyo and Manila.',
+      phone: '+81 90 5555 0142',
+      interests: ['Industrial Design', 'Horology', 'Vinyl', 'Editorial Print'],
+      isPublicInDirectory: true,
+      avatarUrl: '/src/assets/images/member_director_portrait_1794742533514.jpg',
+      createdAt: '2026-01-12T10:00:00.000Z',
+      joinedAt: '2026-01-15T12:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_member_2',
+      email: 'architect@boysattheback.club',
+      name: 'Arthur Sterling',
+      role: 'member',
+      company: 'Sterling & Co. Studio',
+      title: 'Founding Architect',
+      chapter: 'London',
+      membershipStatus: 'active',
+      membershipTier: 'Founding Circle',
+      memberNumber: 'BATB-003',
+      bio: 'Designing private residences, listening rooms, and boutique members lounges across Europe and Southeast Asia.',
+      phone: '+44 7700 900123',
+      interests: ['Brutalist Architecture', 'Bespoke Tailoring', 'Fine Art'],
+      isPublicInDirectory: true,
+      avatarUrl: '/src/assets/images/member_architect_portrait_1794742535069.jpg',
+      createdAt: '2025-10-04T09:00:00.000Z',
+      joinedAt: '2025-10-06T09:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_freelancer_1',
       email: 'designer@tambyus.com',
-      passwordHash: hashPassword('password123', salt1),
-      salt: salt1,
       name: 'Elena Rostova',
-      role: 'freelancer',
+      role: 'member',
       company: 'Studio Rostova',
+      title: 'Design Principal',
+      chapter: 'New York',
+      membershipStatus: 'active',
+      membershipTier: 'Executive',
+      memberNumber: 'BATB-019',
+      bio: 'Visual identity architect and art director partnering with founders and cultural institutions.',
+      phone: '+1 212 555 0198',
+      interests: ['Typography', 'Exhibition Design', 'Publishing'],
+      isPublicInDirectory: true,
       avatarUrl: '/src/assets/images/avatar_designer_1794475769293.jpg',
       createdAt: '2026-10-01T08:00:00.000Z',
-    },
-    {
-      id: clientId,
+      joinedAt: '2026-10-02T08:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_client_1',
       email: 'client@acmelabs.io',
-      passwordHash: hashPassword('password123', salt2),
-      salt: salt2,
       name: 'Marcus Vance',
-      role: 'client',
+      role: 'member',
       company: 'Acme Innovations',
+      title: 'VP of Strategy',
+      chapter: 'Singapore',
+      membershipStatus: 'active',
+      membershipTier: 'Patron',
+      memberNumber: 'BATB-014',
+      bio: 'Advising early-stage hardware and consumer luxury teams across APAC.',
+      phone: '+65 9123 4567',
+      interests: ['Deep Tech', 'Motorsport', 'Culinary Arts'],
+      isPublicInDirectory: true,
       avatarUrl: '/src/assets/images/avatar_client_1794475781352.jpg',
       createdAt: '2026-10-15T09:30:00.000Z',
+      joinedAt: '2026-10-18T11:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_pending_1',
+      email: 'applicant@horizon.co',
+      name: 'Dante Alcaraz',
+      role: 'member',
+      company: 'Horizon Partners',
+      title: 'Venture Partner',
+      chapter: 'Manila',
+      membershipStatus: 'pending',
+      membershipTier: 'Executive',
+      memberNumber: 'BATB-PEND',
+      bio: 'Early-stage investor backing design-led consumer brands and fintech founders in Southeast Asia.',
+      phone: '+63 917 555 0884',
+      interests: ['Venture Capital', 'Contemporary Art', 'Espresso'],
+      isPublicInDirectory: false,
+      createdAt: '2026-11-12T08:00:00.000Z',
+    }),
+  ];
+}
+
+function buildSeedApplications(): MembershipApplication[] {
+  return [
+    {
+      id: 'app_seed_1',
+      userId: 'user_pending_1',
+      applicantName: 'Dante Alcaraz',
+      applicantEmail: 'applicant@horizon.co',
+      company: 'Horizon Partners',
+      title: 'Venture Partner',
+      chapter: 'Manila',
+      tierRequested: 'Executive',
+      motivation: 'Looking to connect with fellow founders and creative directors in the Manila and Singapore chapters for off-the-record founder dinners and collaborative studio salons.',
+      referralCode: 'BATB-001',
+      status: 'pending',
+      submittedAt: '2026-11-12T08:00:00.000Z',
+    },
+    {
+      id: 'app_seed_2',
+      userId: 'user_member_1',
+      applicantName: 'Julian Reyes',
+      applicantEmail: 'member@boysattheback.club',
+      company: 'Monolith Atelier',
+      title: 'Principal Creative Director',
+      chapter: 'Tokyo',
+      tierRequested: 'Executive',
+      motivation: 'Collaborating with architectural and venture members across Tokyo and Manila.',
+      referralCode: 'BATB-003',
+      status: 'approved',
+      reviewNote: 'Vouched by Arthur Sterling. Welcomed to Tokyo Chapter.',
+      submittedAt: '2026-01-12T10:00:00.000Z',
+      reviewedAt: '2026-01-15T12:00:00.000Z',
     },
   ];
+}
+
+function buildSeedAnnouncements(): Announcement[] {
+  return [
+    {
+      id: 'ann_seed_1',
+      title: 'Annual Black-Tie Supper & Founders\' Salon',
+      content: 'Join Founding Circle and Executive members for an evening of private dining, off-the-record roundtables, and live quartet jazz in the backroom library. Dress code: Midnight navy or black tie.',
+      category: 'Event',
+      priority: 'pinned',
+      authorId: 'user_admin_1',
+      authorName: 'Rafael Navarro',
+      eventDate: 'Dec 04, 2026 · 8:00 PM',
+      location: 'The Backroom Lounge, Makati / Manila',
+      publishedAt: '2026-11-14T18:00:00.000Z',
+    },
+    {
+      id: 'ann_seed_2',
+      title: '2027 Member Charter & Global Chapter Reciprocity',
+      content: 'Effective January 2027, active members in good standing receive seamless reciprocal lounge privileges across Manila, Tokyo, Singapore, London, and New York chapters. Digital member credentials are now active in your Profile tab.',
+      category: 'Governance',
+      priority: 'pinned',
+      authorId: 'user_admin_1',
+      authorName: 'Rafael Navarro',
+      publishedAt: '2026-11-11T10:30:00.000Z',
+    },
+    {
+      id: 'ann_seed_3',
+      title: 'Tokyo Chapter: Late-Night Listening & Rare Vintage Tasting',
+      content: 'Hosted by Julian Reyes at our Aoyama listening room. Limited to 18 seated places for members and one accompanied guest. Please review the briefing notes in the Member Vault.',
+      category: 'Event',
+      priority: 'normal',
+      authorId: 'user_admin_1',
+      authorName: 'Rafael Navarro',
+      eventDate: 'Nov 28, 2026 · 9:30 PM',
+      location: 'Aoyama Listening Room, Tokyo',
+      publishedAt: '2026-11-09T14:15:00.000Z',
+    },
+    {
+      id: 'ann_seed_4',
+      title: 'Member Spotlight: Sterling & Co. Opens Kyoto Pavilion',
+      content: 'Congratulations to Founding Circle member Arthur Sterling on unveiling the Kyoto timber & basalt tea pavilion. Private architectural walkthrough available for visiting members through December.',
+      category: 'Spotlight',
+      priority: 'normal',
+      authorId: 'user_admin_1',
+      authorName: 'Rafael Navarro',
+      publishedAt: '2026-11-05T09:00:00.000Z',
+    },
+  ];
+}
+
+// Seed & Migrate Database safely
+function initDatabase(): DatabaseSchema {
+  const seedUsers = buildSeedUsers();
+  const seedApps = buildSeedApplications();
+  const seedAnns = buildSeedAnnouncements();
 
   const portal1: ClientPortal = {
     id: 'portal_acme_1',
-    freelancerId: freelancerId,
+    freelancerId: 'user_admin_1',
     code: 'TB-ACME-2026',
     clientName: 'Acme Innovations',
     clientEmail: 'client@acmelabs.io',
-    projectName: 'Brand Identity & Design System',
-    description: 'Please upload vector logo variants, brand deck references, high-res photography, and approved copy.',
+    projectName: 'Founders Handbook & Event Assets',
+    description: 'Shared vault for club governance documents, architectural renders, and private event photography.',
     status: 'active',
     createdAt: '2026-10-16T10:00:00.000Z',
   };
 
   const portal2: ClientPortal = {
     id: 'portal_launch_2',
-    freelancerId: freelancerId,
+    freelancerId: 'user_admin_1',
     code: 'TB-LAUNCH-884',
-    clientName: 'Veloce Dynamics',
-    clientEmail: 'team@velocedynamics.com',
-    projectName: 'Q4 Product Showcase Web Portal',
-    description: 'Upload 3D renders, CAD specifications, and video press releases for the upcoming launch.',
+    clientName: 'Tokyo Chapter',
+    clientEmail: 'member@boysattheback.club',
+    projectName: 'Tokyo Salon Press & Media Kit',
+    description: 'Upload editorial photos, listening room specs, and guest passes.',
     status: 'active',
     createdAt: '2026-11-01T14:20:00.000Z',
   };
 
-  // Create sample dummy files in uploads directory so they can be downloaded immediately
   const sampleFilesData: StoredFile[] = [
     {
       id: 'file_seed_1',
-      userId: freelancerId,
+      userId: 'user_admin_1',
       portalId: portal1.id,
-      originalName: 'Acme_Brand_Identity_Guidelines_v2.pdf',
+      originalName: 'BATB_2027_Member_Charter.pdf',
       storedName: 'sample_guidelines.pdf',
       mimeType: 'application/pdf',
-      size: 3420800, // 3.4 MB
+      size: 3420800,
       uploadDate: '2026-11-10T11:24:00.000Z',
-      uploadedBy: 'freelancer',
-      uploaderName: 'Elena Rostova',
-      notes: 'Final revised corporate brand guidelines including color palettes & typography specs.',
+      uploadedBy: 'admin',
+      uploaderName: 'Rafael Navarro',
+      notes: 'Official 2027 membership charter, lounge etiquette, and global reciprocity protocols.',
       category: 'document',
       isStarred: true,
     },
     {
       id: 'file_seed_2',
-      userId: freelancerId,
+      userId: 'user_admin_1',
       portalId: portal1.id,
-      originalName: 'Vector_Master_Logo_Suite.svg',
+      originalName: 'Club_Crest_Gold_Emblem.svg',
       storedName: 'sample_logo.svg',
       mimeType: 'image/svg+xml',
-      size: 485120, // 485 KB
+      size: 485120,
       uploadDate: '2026-11-10T14:15:00.000Z',
-      uploadedBy: 'client',
-      uploaderName: 'Marcus Vance (Client)',
-      notes: 'Exported from Illustrator. Includes primary horizontal and stacked lockups in RGB/CMYK.',
+      uploadedBy: 'member',
+      uploaderName: 'Julian Reyes',
+      notes: 'Vector club monogram in burnished gold for print and event invitations.',
       category: 'image',
       isStarred: true,
     },
     {
       id: 'file_seed_3',
-      userId: freelancerId,
+      userId: 'user_freelancer_1',
       portalId: portal1.id,
       originalName: 'Studio_Packaging_Render_4K.png',
       storedName: 'sample_render.png',
       mimeType: 'image/png',
-      size: 5120400, // 5.1 MB
+      size: 5120400,
       uploadDate: '2026-11-11T09:40:00.000Z',
       uploadedBy: 'freelancer',
       uploaderName: 'Elena Rostova',
-      notes: 'Photorealistic matte foil packaging preview for client sign-off before manufacturing run.',
+      notes: 'Archival project render from Studio Rostova.',
       category: 'image',
-      isStarred: false,
-    },
-    {
-      id: 'file_seed_4',
-      userId: freelancerId,
-      portalId: portal1.id,
-      originalName: 'Product_Packaging_DieCut_Template.ai',
-      storedName: 'sample_diecut.ai',
-      mimeType: 'application/postscript',
-      size: 14200300, // 14.2 MB
-      uploadDate: '2026-11-11T16:05:00.000Z',
-      uploadedBy: 'client',
-      uploaderName: 'Marcus Vance (Client)',
-      notes: 'Supplied by printing partner. 300 DPI bleed with spot UV layers.',
-      category: 'design',
-      isStarred: false,
-    },
-    {
-      id: 'file_seed_5',
-      userId: freelancerId,
-      portalId: portal2.id,
-      originalName: 'Typography_Editorial_Font_Package.zip',
-      storedName: 'sample_fonts.zip',
-      mimeType: 'application/zip',
-      size: 18450000, // 18.4 MB
-      uploadDate: '2026-11-12T04:10:00.000Z',
-      uploadedBy: 'freelancer',
-      uploaderName: 'Elena Rostova',
-      notes: 'Licensed web fonts (WOFF2 + TTF) for development handover.',
-      category: 'archive',
       isStarred: false,
     },
   ];
 
-  // Write mock physical files into data/uploads
+  // Ensure sample physical files exist
   for (const f of sampleFilesData) {
     const filePath = path.join(UPLOADS_DIR, f.storedName);
     if (!fs.existsSync(filePath)) {
       if (f.originalName.endsWith('.svg')) {
         const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" width="400" height="120">
-          <rect width="400" height="120" rx="16" fill="#0B1528"/>
-          <circle cx="60" cy="60" r="28" fill="#3B82F6"/>
-          <path d="M50 48 L70 48 L60 72 Z" fill="#FFFFFF"/>
-          <text x="110" y="70" fill="#FFFFFF" font-family="sans-serif" font-size="28" font-weight="bold">TamBuys Brand</text>
+          <rect width="400" height="120" rx="16" fill="#060911"/>
+          <rect x="2" y="2" width="396" height="116" rx="14" fill="none" stroke="#D4AF37" stroke-width="1.5"/>
+          <text x="200" y="68" text-anchor="middle" fill="#D4AF37" font-family="Georgia, serif" font-size="24" font-weight="bold" letter-spacing="3">BOY'S AT THE BACK</text>
         </svg>`;
         fs.writeFileSync(filePath, svgContent, 'utf-8');
       } else {
@@ -319,8 +515,51 @@ function initDatabase(): DatabaseSchema {
     }
   }
 
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const existingData = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')) as Partial<DatabaseSchema>;
+      if (existingData.users && existingData.files) {
+        // Migrate existing users cleanly without overwriting user records
+        const migratedUsers: User[] = existingData.users.map((u, idx) => ({
+          ...u,
+          membershipStatus: u.membershipStatus || 'active',
+          membershipTier: u.membershipTier || (u.role === 'admin' ? 'Founding Circle' : 'Executive'),
+          memberNumber: u.memberNumber || `BATB-${String(idx + 10).padStart(3, '0')}`,
+          chapter: u.chapter || 'Manila',
+          title: u.title || (u.role === 'admin' ? 'Club Administrator' : 'Member'),
+          bio: u.bio || 'Active member of BOY\'S AT THE BACK.',
+          interests: u.interests || ['Private Salons', 'Architecture', 'Design'],
+          isPublicInDirectory: u.isPublicInDirectory ?? true,
+          joinedAt: u.joinedAt || u.createdAt,
+        }));
+
+        // Ensure core seeded accounts exist if not already present
+        for (const su of seedUsers) {
+          if (!migratedUsers.some((u) => u.email.toLowerCase() === su.email.toLowerCase())) {
+            migratedUsers.push(su);
+          }
+        }
+
+        const migrated: DatabaseSchema = {
+          users: migratedUsers,
+          applications: existingData.applications && existingData.applications.length > 0 ? existingData.applications : seedApps,
+          announcements: existingData.announcements && existingData.announcements.length > 0 ? existingData.announcements : seedAnns,
+          portals: existingData.portals && existingData.portals.length > 0 ? existingData.portals : [portal1, portal2],
+          files: existingData.files.length > 0 ? existingData.files : sampleFilesData,
+          sessions: existingData.sessions || [],
+        };
+        fs.writeFileSync(DB_FILE, JSON.stringify(migrated, null, 2), 'utf-8');
+        return migrated;
+      }
+    } catch {
+      // fallback to fresh init
+    }
+  }
+
   const db: DatabaseSchema = {
-    users: initialUsers,
+    users: seedUsers,
+    applications: seedApps,
+    announcements: seedAnns,
     portals: [portal1, portal2],
     files: sampleFilesData,
     sessions: [],
@@ -340,7 +579,7 @@ function saveDatabase() {
   }
 }
 
-// Auth Middleware: verifies token in Authorization header or query param
+// Auth Middleware
 function authenticate(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   let token = '';
@@ -369,16 +608,33 @@ function authenticate(req: express.Request, res: express.Response, next: express
   next();
 }
 
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const user = (req as any).user as User;
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Administrator privileges required.' });
+  }
+  next();
+}
+
 // -------------------------------------------------------------
-// Authentication Endpoints
+// Authentication & Membership Registration Endpoints
 // -------------------------------------------------------------
 
-// Sign Up
 app.post('/api/auth/register', (req, res) => {
-  const { email, password, name, role = 'freelancer', company = '' } = req.body;
+  const {
+    email,
+    password,
+    name,
+    company = '',
+    title = '',
+    chapter = 'Manila',
+    tierRequested = 'Executive',
+    motivation = '',
+    referralCode = '',
+  } = req.body;
 
   if (!email || !password || !name) {
-    return res.status(400).json({ error: 'Please provide email, password, and your name.' });
+    return res.status(400).json({ error: 'Please provide your full name, email, and password.' });
   }
 
   if (password.length < 6) {
@@ -391,21 +647,49 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'An account with this email already exists. Please sign in instead.' });
   }
 
+  const validTier: MembershipTier = ['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tierRequested)
+    ? tierRequested
+    : 'Executive';
+
   const salt = crypto.randomBytes(16).toString('hex');
+  const now = new Date().toISOString();
   const newUser: User = {
     id: `user_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
     email: normalizedEmail,
     passwordHash: hashPassword(password, salt),
     salt,
     name: name.trim(),
-    role: role === 'client' ? 'client' : 'freelancer',
-    company: company.trim() || (role === 'client' ? 'Client Org' : 'Independent Creative'),
-    createdAt: new Date().toISOString(),
+    role: 'member',
+    company: company.trim() || 'Independent Venture',
+    title: title.trim() || 'Prospective Member',
+    chapter: chapter.trim() || 'Manila',
+    membershipStatus: 'pending',
+    membershipTier: validTier,
+    memberNumber: 'BATB-PEND',
+    bio: motivation.trim() || 'New applicant to BOY\'S AT THE BACK.',
+    interests: ['Networking', 'Private Salons'],
+    isPublicInDirectory: false,
+    createdAt: now,
+  };
+
+  const application: MembershipApplication = {
+    id: `app_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+    userId: newUser.id,
+    applicantName: newUser.name,
+    applicantEmail: newUser.email,
+    company: newUser.company,
+    title: newUser.title || 'Member Applicant',
+    chapter: newUser.chapter || 'Manila',
+    tierRequested: validTier,
+    motivation: motivation.trim() || 'Interested in joining the community and attending private chapter salons.',
+    referralCode: referralCode.trim() || undefined,
+    status: 'pending',
+    submittedAt: now,
   };
 
   db.users.push(newUser);
+  db.applications.unshift(application);
 
-  // Generate session token
   const token = crypto.randomBytes(32).toString('hex');
   db.sessions.push({
     token,
@@ -415,16 +699,18 @@ app.post('/api/auth/register', (req, res) => {
 
   saveDatabase();
 
-  const { passwordHash: _, salt: __, ...safeUser } = newUser;
+  const safeUser = sanitizeUser(newUser);
   syncToFirestore('users', newUser.id, safeUser);
+  syncToFirestore('applications', application.id, application);
+
   return res.json({
     token,
     user: safeUser,
-    message: 'Account created successfully.',
+    application,
+    message: 'Membership application submitted! Your profile is currently pending committee review.',
   });
 });
 
-// Sign In
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -448,15 +734,13 @@ app.post('/api/auth/login', (req, res) => {
 
   saveDatabase();
 
-  const { passwordHash: _, salt: __, ...safeUser } = user;
   return res.json({
     token,
-    user: safeUser,
-    message: 'Welcome back!',
+    user: sanitizeUser(user),
+    message: `Welcome back, ${user.name}.`,
   });
 });
 
-// Sign Out
 app.post('/api/auth/logout', authenticate, (req, res) => {
   const user = (req as any).user as User;
   db.sessions = db.sessions.filter((s) => s.userId !== user.id);
@@ -464,32 +748,332 @@ app.post('/api/auth/logout', authenticate, (req, res) => {
   return res.json({ message: 'Signed out successfully.' });
 });
 
-// Get Current User
 app.get('/api/auth/me', authenticate, (req, res) => {
   const user = (req as any).user as User;
-  const { passwordHash: _, salt: __, ...safeUser } = user;
-  return res.json({ user: safeUser });
+  return res.json({ user: sanitizeUser(user) });
 });
 
 // -------------------------------------------------------------
-// Files Endpoints (Protected by User ID isolation)
+// Member Profile & Directory Endpoints
 // -------------------------------------------------------------
 
-// List Files for logged-in user
+app.patch('/api/profile', authenticate, (req, res) => {
+  const currentUser = (req as any).user as User;
+  const user = db.users.find((u) => u.id === currentUser.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Member profile not found.' });
+  }
+
+  const { name, company, title, chapter, bio, phone, interests, isPublicInDirectory } = req.body;
+
+  if (typeof name === 'string' && name.trim()) user.name = name.trim().slice(0, 128);
+  if (typeof company === 'string') user.company = company.trim().slice(0, 128);
+  if (typeof title === 'string') user.title = title.trim().slice(0, 128);
+  if (typeof chapter === 'string' && chapter.trim()) user.chapter = chapter.trim().slice(0, 64);
+  if (typeof bio === 'string') user.bio = bio.trim().slice(0, 2048);
+  if (typeof phone === 'string') user.phone = phone.trim().slice(0, 64);
+  if (Array.isArray(interests)) {
+    user.interests = interests
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  }
+  if (typeof isPublicInDirectory === 'boolean') {
+    user.isPublicInDirectory = isPublicInDirectory;
+  }
+
+  saveDatabase();
+  const safeUser = sanitizeUser(user);
+  syncToFirestore('users', user.id, safeUser);
+
+  return res.json({
+    user: safeUser,
+    message: 'Member profile updated.',
+  });
+});
+
+app.get('/api/members/directory', authenticate, (req, res) => {
+  const { search, chapter, tier } = req.query;
+
+  let members = db.users.filter(
+    (u) => u.membershipStatus === 'active' && u.isPublicInDirectory !== false
+  );
+
+  if (typeof chapter === 'string' && chapter !== 'all' && chapter.trim()) {
+    members = members.filter((m) => (m.chapter || '').toLowerCase() === chapter.trim().toLowerCase());
+  }
+
+  if (typeof tier === 'string' && tier !== 'all' && tier.trim()) {
+    members = members.filter((m) => m.membershipTier === tier.trim());
+  }
+
+  if (typeof search === 'string' && search.trim()) {
+    const q = search.trim().toLowerCase();
+    members = members.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.company.toLowerCase().includes(q) ||
+        (m.title || '').toLowerCase().includes(q) ||
+        (m.chapter || '').toLowerCase().includes(q) ||
+        (m.bio || '').toLowerCase().includes(q) ||
+        m.memberNumber.toLowerCase().includes(q)
+    );
+  }
+
+  const directoryPayload = members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    company: m.company,
+    title: m.title || 'Member',
+    chapter: m.chapter || 'Manila',
+    membershipTier: m.membershipTier,
+    membershipStatus: m.membershipStatus,
+    memberNumber: m.memberNumber,
+    bio: m.bio || '',
+    interests: m.interests || [],
+    avatarUrl: m.avatarUrl,
+    joinedAt: m.joinedAt || m.createdAt,
+  }));
+
+  return res.json({ members: directoryPayload });
+});
+
+// -------------------------------------------------------------
+// Announcements Endpoints
+// -------------------------------------------------------------
+
+app.get('/api/announcements', authenticate, (req, res) => {
+  const { category } = req.query;
+  let list = [...db.announcements];
+
+  if (typeof category === 'string' && category !== 'all') {
+    list = list.filter((a) => a.category === category);
+  }
+
+  // Pinned first, then newest
+  list.sort((a, b) => {
+    if (a.priority === 'pinned' && b.priority !== 'pinned') return -1;
+    if (b.priority === 'pinned' && a.priority !== 'pinned') return 1;
+    return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+  });
+
+  return res.json({ announcements: list });
+});
+
+app.post('/api/announcements', authenticate, requireAdmin, (req, res) => {
+  const user = (req as any).user as User;
+  const { title, content, category = 'Notice', priority = 'normal', eventDate, location } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Announcement title and content are required.' });
+  }
+
+  const validCategory = ['Event', 'Governance', 'Spotlight', 'Notice'].includes(category) ? category : 'Notice';
+  const validPriority = priority === 'pinned' ? 'pinned' : 'normal';
+
+  const announcement: Announcement = {
+    id: `ann_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+    title: title.trim().slice(0, 255),
+    content: content.trim().slice(0, 4096),
+    category: validCategory,
+    priority: validPriority,
+    authorId: user.id,
+    authorName: user.name,
+    eventDate: eventDate ? String(eventDate).trim().slice(0, 64) : undefined,
+    location: location ? String(location).trim().slice(0, 255) : undefined,
+    publishedAt: new Date().toISOString(),
+  };
+
+  db.announcements.unshift(announcement);
+  saveDatabase();
+  syncToFirestore('announcements', announcement.id, announcement);
+
+  return res.json({ announcement, message: 'Announcement published to all members.' });
+});
+
+app.patch('/api/announcements/:id', authenticate, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const ann = db.announcements.find((a) => a.id === id);
+  if (!ann) {
+    return res.status(404).json({ error: 'Announcement not found.' });
+  }
+
+  const { title, content, category, priority, eventDate, location } = req.body;
+  if (typeof title === 'string' && title.trim()) ann.title = title.trim().slice(0, 255);
+  if (typeof content === 'string' && content.trim()) ann.content = content.trim().slice(0, 4096);
+  if (['Event', 'Governance', 'Spotlight', 'Notice'].includes(category)) ann.category = category;
+  if (priority === 'pinned' || priority === 'normal') ann.priority = priority;
+  if (eventDate !== undefined) ann.eventDate = eventDate ? String(eventDate).trim() : undefined;
+  if (location !== undefined) ann.location = location ? String(location).trim() : undefined;
+
+  saveDatabase();
+  syncToFirestore('announcements', ann.id, ann);
+  return res.json({ announcement: ann, message: 'Announcement updated.' });
+});
+
+app.delete('/api/announcements/:id', authenticate, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const idx = db.announcements.findIndex((a) => a.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Announcement not found.' });
+  }
+
+  db.announcements.splice(idx, 1);
+  saveDatabase();
+  deleteFromFirestore('announcements', id);
+
+  return res.json({ message: 'Announcement removed.' });
+});
+
+// -------------------------------------------------------------
+// Admin Management Endpoints
+// -------------------------------------------------------------
+
+app.get('/api/admin/overview', authenticate, requireAdmin, (_req, res) => {
+  const totalMembers = db.users.length;
+  const activeMembers = db.users.filter((u) => u.membershipStatus === 'active').length;
+  const pendingApplications = db.applications.filter((a) => a.status === 'pending').length;
+  const suspendedMembers = db.users.filter((u) => u.membershipStatus === 'suspended').length;
+
+  const tierBreakdown: Record<MembershipTier, number> = {
+    'Founding Circle': db.users.filter((u) => u.membershipTier === 'Founding Circle').length,
+    Executive: db.users.filter((u) => u.membershipTier === 'Executive').length,
+    Patron: db.users.filter((u) => u.membershipTier === 'Patron').length,
+    Associate: db.users.filter((u) => u.membershipTier === 'Associate').length,
+  };
+
+  return res.json({
+    totalMembers,
+    activeMembers,
+    pendingApplications,
+    suspendedMembers,
+    announcementsCount: db.announcements.length,
+    vaultFilesCount: db.files.length,
+    tierBreakdown,
+  });
+});
+
+app.get('/api/admin/members', authenticate, requireAdmin, (_req, res) => {
+  const members = db.users
+    .map((u) => sanitizeUser(u))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return res.json({ members });
+});
+
+app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const member = db.users.find((u) => u.id === id);
+  if (!member) {
+    return res.status(404).json({ error: 'Member not found.' });
+  }
+
+  const { membershipStatus, membershipTier, role, chapter, memberNumber } = req.body;
+
+  if (['active', 'pending', 'suspended', 'alumni'].includes(membershipStatus)) {
+    member.membershipStatus = membershipStatus;
+    if (membershipStatus === 'active' && member.memberNumber === 'BATB-PEND') {
+      const nextNum = db.users.filter((u) => u.memberNumber.startsWith('BATB-0')).length + 20;
+      member.memberNumber = `BATB-${String(nextNum).padStart(3, '0')}`;
+      member.joinedAt = member.joinedAt || new Date().toISOString();
+      member.isPublicInDirectory = true;
+    }
+  }
+  if (['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(membershipTier)) {
+    member.membershipTier = membershipTier;
+  }
+  if (['admin', 'member', 'freelancer', 'client'].includes(role)) {
+    member.role = role;
+  }
+  if (typeof chapter === 'string' && chapter.trim()) {
+    member.chapter = chapter.trim().slice(0, 64);
+  }
+  if (typeof memberNumber === 'string' && memberNumber.trim()) {
+    member.memberNumber = memberNumber.trim().slice(0, 32);
+  }
+
+  saveDatabase();
+  const safeMember = sanitizeUser(member);
+  syncToFirestore('users', member.id, safeMember);
+
+  return res.json({ member: safeMember, message: `Updated ${member.name}'s membership record.` });
+});
+
+app.get('/api/admin/applications', authenticate, requireAdmin, (_req, res) => {
+  const apps = [...db.applications].sort(
+    (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+  );
+  return res.json({ applications: apps });
+});
+
+app.post('/api/admin/applications/:id/review', authenticate, requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { action, tier, reviewNote = '' } = req.body;
+
+  const application = db.applications.find((a) => a.id === id);
+  if (!application) {
+    return res.status(404).json({ error: 'Application not found.' });
+  }
+
+  if (action !== 'approve' && action !== 'decline') {
+    return res.status(400).json({ error: 'Action must be "approve" or "decline".' });
+  }
+
+  const now = new Date().toISOString();
+  application.status = action === 'approve' ? 'approved' : 'declined';
+  application.reviewedAt = now;
+  application.reviewNote = String(reviewNote || '').trim().slice(0, 1024) || undefined;
+
+  if (action === 'approve' && ['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tier)) {
+    application.tierRequested = tier;
+  }
+
+  const linkedUser = db.users.find((u) => u.id === application.userId);
+  if (linkedUser) {
+    if (action === 'approve') {
+      linkedUser.membershipStatus = 'active';
+      linkedUser.membershipTier = application.tierRequested;
+      linkedUser.joinedAt = now;
+      linkedUser.isPublicInDirectory = true;
+      if (!linkedUser.memberNumber || linkedUser.memberNumber === 'BATB-PEND') {
+        const activeCount = db.users.filter((u) => /^BATB-\d+$/.test(u.memberNumber)).length + 21;
+        linkedUser.memberNumber = `BATB-${String(activeCount).padStart(3, '0')}`;
+      }
+    } else {
+      linkedUser.membershipStatus = 'suspended';
+      linkedUser.isPublicInDirectory = false;
+    }
+    syncToFirestore('users', linkedUser.id, sanitizeUser(linkedUser));
+  }
+
+  saveDatabase();
+  syncToFirestore('applications', application.id, application);
+
+  return res.json({
+    application,
+    user: linkedUser ? sanitizeUser(linkedUser) : undefined,
+    message:
+      action === 'approve'
+        ? `Approved ${application.applicantName} into ${application.tierRequested}.`
+        : `Declined application for ${application.applicantName}.`,
+  });
+});
+
+// -------------------------------------------------------------
+// Preserved Member Vault: Files & Portals Endpoints
+// -------------------------------------------------------------
+
 app.get('/api/files', authenticate, (req, res) => {
   const user = (req as any).user as User;
   const { category, search, portalId, sortBy = 'date_desc' } = req.query;
 
-  // Security rule: each user only sees files they own or their client portal files
   let userFiles = db.files.filter((f) => {
-    if (user.role === 'freelancer') {
-      return f.userId === user.id;
-    } else {
-      // client can see files in portals associated with them
-      const userPortals = db.portals.filter((p) => p.clientEmail.toLowerCase() === user.email.toLowerCase());
-      const portalIds = userPortals.map((p) => p.id);
-      return f.userId === user.id || (f.portalId && portalIds.includes(f.portalId));
+    if (user.role === 'admin') return true;
+    if (user.role === 'freelancer' || user.role === 'member') {
+      return f.userId === user.id || f.uploadedBy === 'admin';
     }
+    const userPortals = db.portals.filter((p) => p.clientEmail.toLowerCase() === user.email.toLowerCase());
+    const portalIds = userPortals.map((p) => p.id);
+    return f.userId === user.id || (f.portalId && portalIds.includes(f.portalId));
   });
 
   if (category && category !== 'all') {
@@ -510,21 +1094,18 @@ app.get('/api/files', authenticate, (req, res) => {
     );
   }
 
-  // Sorting
   userFiles.sort((a, b) => {
     if (sortBy === 'date_asc') return new Date(a.uploadDate).getTime() - new Date(b.uploadDate).getTime();
     if (sortBy === 'name_asc') return a.originalName.localeCompare(b.originalName);
     if (sortBy === 'name_desc') return b.originalName.localeCompare(a.originalName);
     if (sortBy === 'size_desc') return b.size - a.size;
     if (sortBy === 'size_asc') return a.size - b.size;
-    // default date_desc
     return new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime();
   });
 
   return res.json({ files: userFiles });
 });
 
-// Upload Files (Single or Multiple)
 app.post('/api/files/upload', authenticate, upload.array('files', 15), (req, res) => {
   const user = (req as any).user as User;
   const files = req.files as Express.Multer.File[];
@@ -540,14 +1121,14 @@ app.post('/api/files/upload', authenticate, upload.array('files', 15), (req, res
     const category = determineCategory(f.originalname, f.mimetype);
     const newFile: StoredFile = {
       id: `file_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
-      userId: user.role === 'freelancer' ? user.id : (portalId ? db.portals.find((p) => p.id === portalId)?.freelancerId || user.id : user.id),
+      userId: user.id,
       portalId: portalId || undefined,
       originalName: f.originalname,
       storedName: f.filename,
       mimeType: f.mimetype,
       size: f.size,
       uploadDate: new Date().toISOString(),
-      uploadedBy: user.role,
+      uploadedBy: user.role === 'admin' ? 'admin' : 'member',
       uploaderName: user.name,
       notes: notes || '',
       category,
@@ -567,18 +1148,15 @@ app.post('/api/files/upload', authenticate, upload.array('files', 15), (req, res
   });
 });
 
-// Download File
 app.get('/api/files/:id/download', (req, res) => {
   const { id } = req.params;
   const token = (req.query.token as string) || (req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : '');
 
-  // Look up file
   const file = db.files.find((f) => f.id === id);
   if (!file) {
     return res.status(404).json({ error: 'Requested file was not found.' });
   }
 
-  // Security check: if token provided or public portal token
   if (token) {
     const session = db.sessions.find((s) => s.token === token);
     if (!session) {
@@ -589,8 +1167,7 @@ app.get('/api/files/:id/download', (req, res) => {
   const filePath = path.join(UPLOADS_DIR, file.storedName);
 
   if (!fs.existsSync(filePath)) {
-    // Generate sample buffer on the fly if needed
-    const placeholder = Buffer.from(`TamBuys Secure Stored File: ${file.originalName}\nUploaded: ${file.uploadDate}`);
+    const placeholder = Buffer.from(`BOY'S AT THE BACK Vault Document: ${file.originalName}\nUploaded: ${file.uploadDate}`);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);
     res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
     return res.send(placeholder);
@@ -601,7 +1178,6 @@ app.get('/api/files/:id/download', (req, res) => {
   return res.sendFile(filePath);
 });
 
-// Inline Preview File
 app.get('/api/files/:id/preview', (req, res) => {
   const { id } = req.params;
   const file = db.files.find((f) => f.id === id);
@@ -619,7 +1195,6 @@ app.get('/api/files/:id/preview', (req, res) => {
   return res.sendFile(filePath);
 });
 
-// Update File Notes or Details
 app.patch('/api/files/:id', authenticate, (req, res) => {
   const user = (req as any).user as User;
   const { id } = req.params;
@@ -630,8 +1205,7 @@ app.patch('/api/files/:id', authenticate, (req, res) => {
     return res.status(404).json({ error: 'File not found.' });
   }
 
-  // Security rule: must own the file
-  if (file.userId !== user.id) {
+  if (file.userId !== user.id && user.role !== 'admin') {
     return res.status(403).json({ error: 'Permission denied. You can only edit your own files.' });
   }
 
@@ -644,7 +1218,6 @@ app.patch('/api/files/:id', authenticate, (req, res) => {
   return res.json({ file, message: 'File details updated.' });
 });
 
-// Delete File (Safe and Secure)
 app.delete('/api/files/:id', authenticate, (req, res) => {
   const user = (req as any).user as User;
   const { id } = req.params;
@@ -656,12 +1229,10 @@ app.delete('/api/files/:id', authenticate, (req, res) => {
 
   const file = db.files[fileIndex];
 
-  // Security rule: only the file owner can delete it
-  if (file.userId !== user.id) {
-    return res.status(403).json({ error: 'Permission denied. You can only delete files in your portal.' });
+  if (file.userId !== user.id && user.role !== 'admin') {
+    return res.status(403).json({ error: 'Permission denied. You can only delete your own files.' });
   }
 
-  // Remove physical file from disk
   const filePath = path.join(UPLOADS_DIR, file.storedName);
   if (fs.existsSync(filePath)) {
     try {
@@ -671,7 +1242,6 @@ app.delete('/api/files/:id', authenticate, (req, res) => {
     }
   }
 
-  // Remove from database
   db.files.splice(fileIndex, 1);
   saveDatabase();
   deleteFromFirestore('files', file.id);
@@ -679,22 +1249,18 @@ app.delete('/api/files/:id', authenticate, (req, res) => {
   return res.json({ message: `"${file.originalName}" was permanently deleted.` });
 });
 
-// -------------------------------------------------------------
-// Client Portals Endpoints (Freelancers create links for clients)
-// -------------------------------------------------------------
-
-// Get Portals for current user
 app.get('/api/portals', authenticate, (req, res) => {
   const user = (req as any).user as User;
 
   let portals: ClientPortal[];
-  if (user.role === 'freelancer') {
-    portals = db.portals.filter((p) => p.freelancerId === user.id);
+  if (user.role === 'admin') {
+    portals = db.portals;
   } else {
-    portals = db.portals.filter((p) => p.clientEmail.toLowerCase() === user.email.toLowerCase());
+    portals = db.portals.filter(
+      (p) => p.freelancerId === user.id || p.clientEmail.toLowerCase() === user.email.toLowerCase()
+    );
   }
 
-  // Enrich with file counts & total size
   const enriched = portals.map((p) => {
     const portalFiles = db.files.filter((f) => f.portalId === p.id);
     const totalSize = portalFiles.reduce((acc, curr) => acc + curr.size, 0);
@@ -708,22 +1274,20 @@ app.get('/api/portals', authenticate, (req, res) => {
   return res.json({ portals: enriched });
 });
 
-// Create a new client portal
 app.post('/api/portals', authenticate, (req, res) => {
   const user = (req as any).user as User;
   const { clientName, clientEmail, projectName, description } = req.body;
 
   if (!clientName || !projectName) {
-    return res.status(400).json({ error: 'Please provide Client Name and Project Name.' });
+    return res.status(400).json({ error: 'Please provide Recipient Name and Portal Title.' });
   }
 
-  // Generate unique clean portal code e.g. TB-ACME-492
   const slug = clientName
     .replace(/[^a-zA-Z0-9]/g, '')
     .substring(0, 6)
     .toUpperCase();
   const randomSuffix = Math.floor(100 + Math.random() * 900);
-  const code = `TB-${slug || 'PORTAL'}-${randomSuffix}`;
+  const code = `BATB-${slug || 'DROP'}-${randomSuffix}`;
 
   const newPortal: ClientPortal = {
     id: `portal_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
@@ -739,14 +1303,14 @@ app.post('/api/portals', authenticate, (req, res) => {
 
   db.portals.unshift(newPortal);
   saveDatabase();
+  syncToFirestore('portals', newPortal.id, newPortal);
 
   return res.json({
     portal: { ...newPortal, fileCount: 0, totalSize: 0 },
-    message: 'Client portal created successfully.',
+    message: 'Drop portal created successfully.',
   });
 });
 
-// Public Portal View (For clients uploading via shared link without needing full account)
 app.get('/api/portals/public/:code', (req, res) => {
   const { code } = req.params;
   const portal = db.portals.find((p) => p.code.toUpperCase() === code.toUpperCase());
@@ -779,15 +1343,14 @@ app.get('/api/portals/public/:code', (req, res) => {
       createdAt: portal.createdAt,
     },
     freelancer: {
-      name: freelancer?.name || 'Designer',
-      company: freelancer?.company || 'Design Studio',
+      name: freelancer?.name || 'Member Host',
+      company: freelancer?.company || 'BOY\'S AT THE BACK',
       avatarUrl: freelancer?.avatarUrl,
     },
     files: portalFiles,
   });
 });
 
-// Public Portal Upload (Client uploads directly to designer's portal)
 app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, res) => {
   const { code } = req.params;
   const { clientName, notes } = req.body;
@@ -816,7 +1379,7 @@ app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, re
       size: f.size,
       uploadDate: new Date().toISOString(),
       uploadedBy: 'client',
-      uploaderName: clientName || portal.clientName || 'Client Upload',
+      uploaderName: clientName || portal.clientName || 'Guest Upload',
       notes: notes || '',
       category,
       isStarred: false,
@@ -824,6 +1387,7 @@ app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, re
 
     db.files.unshift(newFile);
     uploadedRecords.push(newFile);
+    syncToFirestore('files', newFile.id, newFile);
   }
 
   saveDatabase();
@@ -834,13 +1398,12 @@ app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, re
   });
 });
 
-// -------------------------------------------------------------
-// Dashboard Statistics & Storage Summary
-// -------------------------------------------------------------
 app.get('/api/stats', authenticate, (req, res) => {
   const user = (req as any).user as User;
 
-  const userFiles = db.files.filter((f) => f.userId === user.id);
+  const userFiles = user.role === 'admin'
+    ? db.files
+    : db.files.filter((f) => f.userId === user.id || f.uploadedBy === 'admin');
   const totalBytes = userFiles.reduce((acc, curr) => acc + curr.size, 0);
 
   const categoryBreakdown = {
@@ -851,19 +1414,16 @@ app.get('/api/stats', authenticate, (req, res) => {
     other: userFiles.filter((f) => f.category === 'other').length,
   };
 
-  const clientUploads = userFiles.filter((f) => f.uploadedBy === 'client').length;
-  const freelancerUploads = userFiles.filter((f) => f.uploadedBy === 'freelancer').length;
-
   return res.json({
     totalFiles: userFiles.length,
     totalBytes,
     totalBytesFormatted: `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`,
-    quotaBytes: 2 * 1024 * 1024 * 1024, // 2 GB free tier
+    quotaBytes: 2 * 1024 * 1024 * 1024,
     quotaPercentage: Math.min(100, (totalBytes / (2 * 1024 * 1024 * 1024)) * 100).toFixed(1),
     categoryBreakdown,
-    clientUploads,
-    freelancerUploads,
-    portalCount: db.portals.filter((p) => p.freelancerId === user.id).length,
+    clientUploads: userFiles.filter((f) => f.uploadedBy === 'client').length,
+    freelancerUploads: userFiles.filter((f) => f.uploadedBy === 'freelancer' || f.uploadedBy === 'member').length,
+    portalCount: db.portals.filter((p) => p.freelancerId === user.id || user.role === 'admin').length,
   });
 });
 
@@ -885,8 +1445,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, () => {
-    console.log(`TamBuys backend & frontend ready at http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`BOY'S AT THE BACK backend & frontend ready at http://localhost:${PORT}`);
   });
 }
 

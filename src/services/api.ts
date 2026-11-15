@@ -1,10 +1,24 @@
-import { User, StoredFile, ClientPortal, DashboardStats, PublicPortalData } from '../types';
+import {
+  User,
+  DirectoryMember,
+  MembershipApplication,
+  Announcement,
+  AdminOverview,
+  MembershipStatus,
+  MembershipTier,
+  UserRole,
+  StoredFile,
+  ClientPortal,
+  DashboardStats,
+  PublicPortalData,
+} from '../types';
 
-const TOKEN_KEY = 'tambyus_auth_token';
+const TOKEN_KEY = 'batb_auth_token';
+const LEGACY_TOKEN_KEY = 'tambyus_auth_token';
 
 export const api = {
   getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || localStorage.getItem(LEGACY_TOKEN_KEY);
   },
 
   setToken(token: string) {
@@ -13,6 +27,7 @@ export const api = {
 
   clearToken() {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
   },
 
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -42,8 +57,20 @@ export const api = {
     return data as T;
   },
 
-  // Auth
-  async register(body: { email: string; password: string; name: string; role?: string; company?: string }) {
+  // -------------------------------------------------------------
+  // Authentication & Registration
+  // -------------------------------------------------------------
+  async register(body: {
+    email: string;
+    password: string;
+    name: string;
+    company?: string;
+    title?: string;
+    chapter?: string;
+    tierRequested?: MembershipTier;
+    motivation?: string;
+    referralCode?: string;
+  }) {
     const data = await this.request<{ token: string; user: User; message: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -76,7 +103,122 @@ export const api = {
     return data.user;
   },
 
-  // Files
+  // -------------------------------------------------------------
+  // Member Profile & Directory
+  // -------------------------------------------------------------
+  async updateProfile(updates: {
+    name?: string;
+    company?: string;
+    title?: string;
+    chapter?: string;
+    bio?: string;
+    phone?: string;
+    interests?: string[];
+    isPublicInDirectory?: boolean;
+  }) {
+    const data = await this.request<{ user: User; message: string }>('/api/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    return data;
+  },
+
+  async getDirectory(params?: { search?: string; chapter?: string; tier?: string }) {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.chapter) query.set('chapter', params.chapter);
+    if (params?.tier) query.set('tier', params.tier);
+
+    const data = await this.request<{ members: DirectoryMember[] }>(`/api/members/directory?${query.toString()}`);
+    return data.members;
+  },
+
+  // -------------------------------------------------------------
+  // Announcements
+  // -------------------------------------------------------------
+  async getAnnouncements(category?: string) {
+    const query = new URLSearchParams();
+    if (category && category !== 'all') query.set('category', category);
+    const data = await this.request<{ announcements: Announcement[] }>(`/api/announcements?${query.toString()}`);
+    return data.announcements;
+  },
+
+  async createAnnouncement(payload: {
+    title: string;
+    content: string;
+    category: Announcement['category'];
+    priority: Announcement['priority'];
+    eventDate?: string;
+    location?: string;
+  }) {
+    return this.request<{ announcement: Announcement; message: string }>('/api/announcements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateAnnouncement(id: string, updates: Partial<Announcement>) {
+    return this.request<{ announcement: Announcement; message: string }>(`/api/announcements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deleteAnnouncement(id: string) {
+    return this.request<{ message: string }>(`/api/announcements/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // -------------------------------------------------------------
+  // Admin Console
+  // -------------------------------------------------------------
+  async getAdminOverview(): Promise<AdminOverview> {
+    return this.request<AdminOverview>('/api/admin/overview');
+  },
+
+  async getAdminMembers(): Promise<User[]> {
+    const data = await this.request<{ members: User[] }>('/api/admin/members');
+    return data.members;
+  },
+
+  async updateAdminMember(
+    id: string,
+    updates: {
+      membershipStatus?: MembershipStatus;
+      membershipTier?: MembershipTier;
+      role?: UserRole;
+      chapter?: string;
+      memberNumber?: string;
+    }
+  ) {
+    return this.request<{ member: User; message: string }>(`/api/admin/members/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async getAdminApplications(): Promise<MembershipApplication[]> {
+    const data = await this.request<{ applications: MembershipApplication[] }>('/api/admin/applications');
+    return data.applications;
+  },
+
+  async reviewApplication(
+    id: string,
+    payload: { action: 'approve' | 'decline'; tier?: MembershipTier; reviewNote?: string }
+  ) {
+    return this.request<{ application: MembershipApplication; user?: User; message: string }>(
+      `/api/admin/applications/${id}/review`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  // -------------------------------------------------------------
+  // Preserved Member Vault (Files & Portals)
+  // -------------------------------------------------------------
   async getFiles(params?: { category?: string; search?: string; portalId?: string; sortBy?: string }) {
     const query = new URLSearchParams();
     if (params?.category) query.set('category', params.category);
@@ -124,7 +266,6 @@ export const api = {
     return `/api/files/${id}/preview`;
   },
 
-  // Portals
   async getPortals() {
     const data = await this.request<{ portals: ClientPortal[] }>('/api/portals');
     return data.portals;
@@ -154,7 +295,6 @@ export const api = {
     });
   },
 
-  // Stats
   async getStats(): Promise<DashboardStats> {
     return this.request<DashboardStats>('/api/stats');
   },

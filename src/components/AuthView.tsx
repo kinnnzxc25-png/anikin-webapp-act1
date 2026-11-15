@@ -1,19 +1,44 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
-import { User } from '../types';
-import { Lock, Mail, User as UserIcon, Building2, ShieldCheck, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { User, MembershipTier } from '../types';
+import {
+  Lock,
+  Mail,
+  User as UserIcon,
+  Building2,
+  Briefcase,
+  MapPin,
+  ArrowLeft,
+  ArrowRight,
+  ShieldCheck,
+  KeyRound,
+} from 'lucide-react';
 
 interface AuthViewProps {
+  initialMode?: 'signin' | 'signup';
+  onBackToLanding: () => void;
   onSuccess: (user: User) => void;
 }
 
-export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+const CHAPTERS = ['Manila', 'Tokyo', 'Singapore', 'London', 'New York'];
+const TIERS: MembershipTier[] = ['Executive', 'Founding Circle', 'Patron', 'Associate'];
+
+export const AuthView: React.FC<AuthViewProps> = ({
+  initialMode = 'signin',
+  onBackToLanding,
+  onSuccess,
+}) => {
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'freelancer' | 'client'>('freelancer');
   const [company, setCompany] = useState('');
+  const [title, setTitle] = useState('');
+  const [chapter, setChapter] = useState('Manila');
+  const [tierRequested, setTierRequested] = useState<MembershipTier>('Executive');
+  const [referralCode, setReferralCode] = useState('');
+  const [motivation, setMotivation] = useState('');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,13 +56,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
           email,
           password,
           name,
-          role,
           company,
+          title,
+          chapter,
+          tierRequested,
+          referralCode,
+          motivation,
         });
         onSuccess(res.user);
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      setError(err.message || 'Authentication failed. Please check your details.');
     } finally {
       setLoading(false);
     }
@@ -50,50 +79,61 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
       const res = await api.login({ email: demoEmail, password: 'password123' });
       onSuccess(res.user);
     } catch (err: any) {
-      setError(err.message || 'Could not log in to demo account.');
+      setError(err.message || 'Could not sign in to demo account.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        {/* Brand Emblem */}
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#0B1528] text-white shadow-md shadow-slate-900/10 mb-4 ring-1 ring-white/10">
-          <svg className="w-8 h-8 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20 7h-7" />
-            <path d="M14 17H5" />
-            <circle cx="17" cy="17" r="3" />
-            <circle cx="7" cy="7" r="3" />
-          </svg>
+    <div className="min-h-screen bg-[#060911] text-slate-100 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-xl w-full mx-auto">
+        {/* Back link */}
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-[#E7C860] transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Home</span>
+          </button>
+
+          <span className="text-[11px] font-mono text-slate-500">
+            Members & Applicants Portal
+          </span>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          TamBuys
-        </h1>
-        <p className="mt-2 text-sm text-slate-600 max-w-sm mx-auto">
-          The secure client file portal for freelance designers and their clients.
-        </p>
-      </div>
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#0A1120] border border-[#D4AF37]/40 text-[#E7C860] font-display text-lg font-bold mb-3">
+            B
+          </div>
+          <h1 className="font-display text-3xl font-semibold tracking-[0.14em] text-[#E7C860]">
+            BOY'S AT THE BACK
+          </h1>
+          <p className="text-xs text-slate-400 mt-1.5">
+            An Exclusive Community for Members.
+          </p>
+        </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-6 shadow-sm border border-slate-200/80 rounded-2xl sm:px-10">
-          {/* Mode Switcher Tabs */}
-          <div className="flex p-1 bg-slate-100 rounded-xl mb-6">
+        {/* Card Container */}
+        <div className="bg-[#0A1120] border border-[#D4AF37]/20 rounded-2xl p-6 sm:p-8 shadow-2xl">
+          {/* Mode Tabs */}
+          <div className="flex p-1 bg-[#060911] rounded-xl border border-slate-800 mb-6">
             <button
               type="button"
               onClick={() => {
                 setMode('signin');
                 setError(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+              className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 mode === 'signin'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[#D4AF37] text-[#060911]'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
-              Sign In
+              Member Sign In
             </button>
             <button
               type="button"
@@ -101,19 +141,19 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
                 setMode('signup');
                 setError(null);
               }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+              className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 mode === 'signup'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[#D4AF37] text-[#060911]'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
-              Create an Account
+              Membership Registration
             </button>
           </div>
 
           {error && (
-            <div className="mb-5 p-3 rounded-xl bg-red-50 border border-red-200/80 text-xs text-red-700 flex items-start gap-2">
-              <span className="shrink-0 text-red-500 font-bold">!</span>
+            <div className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200 flex items-start gap-2">
+              <span className="font-bold text-red-400">!</span>
               <span>{error}</span>
             </div>
           )}
@@ -121,203 +161,230 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <UserIcon className="h-4 w-4" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Lorenzo Santos"
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Alex Morgan"
-                      className="block w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50 hover:bg-white transition-colors"
-                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Company / Studio
+                    </label>
+                    <div className="relative">
+                      <Building2 className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        placeholder="e.g. Atelier North"
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Account Type
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRole('freelancer')}
-                      className={`p-2.5 text-xs text-left rounded-xl border transition-all ${
-                        role === 'freelancer'
-                          ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-semibold ring-1 ring-blue-600'
-                          : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
-                      }`}
-                    >
-                      <div className="font-semibold text-slate-900">Freelancer / Designer</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">Collect and deliver files</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('client')}
-                      className={`p-2.5 text-xs text-left rounded-xl border transition-all ${
-                        role === 'client'
-                          ? 'border-blue-600 bg-blue-50/60 text-blue-900 font-semibold ring-1 ring-blue-600'
-                          : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-white'
-                      }`}
-                    >
-                      <div className="font-semibold text-slate-900">Client Partner</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">Upload project assets</div>
-                    </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Title / Profession
+                    </label>
+                    <div className="relative">
+                      <Briefcase className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="e.g. Managing Partner"
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Preferred Chapter
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <select
+                        value={chapter}
+                        onChange={(e) => setChapter(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                      >
+                        {CHAPTERS.map((c) => (
+                          <option key={c} value={c}>
+                            {c} Chapter
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Studio or Company Name <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Building2 className="h-4 w-4" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Membership Tier Requested
+                    </label>
+                    <select
+                      value={tierRequested}
+                      onChange={(e) => setTierRequested(e.target.value as MembershipTier)}
+                      className="w-full px-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                    >
+                      {TIERS.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Member Referral Code <span className="text-slate-500">(Optional)</span>
+                    </label>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        value={referralCode}
+                        onChange={(e) => setReferralCode(e.target.value)}
+                        placeholder="e.g. BATB-001"
+                        className="w-full pl-9 pr-3 py-2 text-xs font-mono rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder="e.g. Morgan Studio / Acme Co"
-                      className="block w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50 hover:bg-white transition-colors"
-                    />
                   </div>
                 </div>
               </>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="h-4 w-4" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={mode === 'signin' ? 'sm:col-span-2' : ''}>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@domain.com"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                  />
                 </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@domain.com"
-                  className="block w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50 hover:bg-white transition-colors"
-                />
+              </div>
+
+              <div className={mode === 'signin' ? 'sm:col-span-2' : ''}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Password
+                  </label>
+                  {mode === 'signin' && (
+                    <span className="text-[11px] text-slate-500">
+                      Demo password: <code className="font-mono text-slate-300">password123</code>
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimum 6 characters"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Password
+            {mode === 'signup' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Brief Introduction & Why You Wish to Join
                 </label>
-                {mode === 'signin' && (
-                  <span className="text-xs text-slate-400">
-                    Use <code className="text-slate-600 font-mono">password123</code> for demo
-                  </span>
-                )}
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="h-4 w-4" />
-                </div>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="block w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50 hover:bg-white transition-colors"
+                <textarea
+                  rows={2}
+                  value={motivation}
+                  onChange={(e) => setMotivation(e.target.value)}
+                  placeholder="Share your work, interests, and what brings you to BOY'S AT THE BACK."
+                  className="w-full px-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
-            </div>
+            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-[#0B1528] hover:bg-slate-800 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+              className="w-full py-2.5 px-4 rounded-xl bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] text-xs font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              {loading ? (
-                <span>Please wait...</span>
-              ) : mode === 'signin' ? (
-                <>
-                  <span>Sign In to TamBuys</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              ) : (
-                <>
-                  <span>Create an Account</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
+              <span>
+                {loading
+                  ? 'Please wait...'
+                  : mode === 'signin'
+                  ? 'Sign In to Member Portal'
+                  : 'Submit Membership Application'}
+              </span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
 
-          {/* Quick Demo Credentials */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
-              <span className="flex items-center gap-1 font-medium text-slate-700">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                1-Click Instant Demo:
-              </span>
-              <span>No signup needed</span>
+          {/* Instant Demo Access */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80">
+            <div className="flex items-center justify-between text-xs mb-3">
+              <span className="font-semibold text-slate-300">Instant Demo Access</span>
+              <span className="text-[11px] text-slate-500">1-Click Preview</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
-                onClick={() => handleDemoLogin('designer@tambyus.com')}
-                className="flex items-center gap-2.5 p-2 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-left transition-colors group cursor-pointer"
+                onClick={() => handleDemoLogin('admin@boysattheback.club')}
+                className="p-2.5 rounded-xl bg-[#060911] border border-[#D4AF37]/30 hover:border-[#D4AF37] text-left transition-colors cursor-pointer"
               >
-                <img
-                  src="/src/assets/images/avatar_designer_1794475769293.jpg"
-                  alt="Elena Rostova"
-                  className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200"
-                />
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                    Elena (Designer)
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate">Studio Rostova</div>
-                </div>
+                <div className="text-xs font-semibold text-[#E7C860]">Club Admin</div>
+                <div className="text-[11px] text-slate-400 truncate mt-0.5">Rafael Navarro</div>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleDemoLogin('client@acmelabs.io')}
-                className="flex items-center gap-2.5 p-2 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-left transition-colors group cursor-pointer"
+                onClick={() => handleDemoLogin('member@boysattheback.club')}
+                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-[#D4AF37]/60 text-left transition-colors cursor-pointer"
               >
-                <img
-                  src="/src/assets/images/avatar_client_1794475781352.jpg"
-                  alt="Marcus Vance"
-                  className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-200"
-                />
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 group-hover:text-blue-600 transition-colors truncate">
-                    Marcus (Client)
-                  </div>
-                  <div className="text-[11px] text-slate-500 truncate">Acme Innovations</div>
-                </div>
+                <div className="text-xs font-semibold text-white">Active Member</div>
+                <div className="text-[11px] text-slate-400 truncate mt-0.5">Julian Reyes</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('applicant@horizon.co')}
+                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-amber-500/50 text-left transition-colors cursor-pointer"
+              >
+                <div className="text-xs font-semibold text-amber-300">Pending Status</div>
+                <div className="text-[11px] text-slate-400 truncate mt-0.5">Dante Alcaraz</div>
               </button>
             </div>
           </div>
 
-          {/* Security Features */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center gap-4 text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              Isolated User Vaults
-            </span>
-            <span>·</span>
-            <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-              Direct File Streaming
-            </span>
+          <div className="mt-5 pt-4 border-t border-slate-800/60 flex items-center justify-center gap-2 text-[11px] text-slate-500">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span>Protected Member Registry & Cloud Firestore Persistence</span>
           </div>
         </div>
       </div>
