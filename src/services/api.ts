@@ -6,6 +6,7 @@ import {
   AdminOverview,
   MembershipStatus,
   MembershipTier,
+  RegistrationType,
   UserRole,
   StoredFile,
   ClientPortal,
@@ -64,6 +65,7 @@ export const api = {
     email: string;
     password: string;
     name: string;
+    registrationType: RegistrationType;
     company?: string;
     title?: string;
     chapter?: string;
@@ -71,7 +73,7 @@ export const api = {
     motivation?: string;
     referralCode?: string;
   }) {
-    const data = await this.request<{ token: string; user: User; message: string }>('/api/auth/register', {
+    const data = await this.request<{ token: string; user: User; application?: MembershipApplication; message: string }>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(body),
     });
@@ -98,9 +100,14 @@ export const api = {
     }
   },
 
-  async getCurrentUser(): Promise<User> {
-    const data = await this.request<{ user: User }>('/api/auth/me');
-    return data.user;
+  async getCurrentUser(): Promise<{ user: User; application?: MembershipApplication | null }> {
+    const data = await this.request<{ user: User; application?: MembershipApplication | null }>('/api/auth/me');
+    return data;
+  },
+
+  async getMyApplication(): Promise<MembershipApplication | null> {
+    const data = await this.request<{ application: MembershipApplication | null }>('/api/membership/my-application');
+    return data.application;
   },
 
   // -------------------------------------------------------------
@@ -177,8 +184,21 @@ export const api = {
     return this.request<AdminOverview>('/api/admin/overview');
   },
 
-  async getAdminMembers(): Promise<User[]> {
-    const data = await this.request<{ members: User[] }>('/api/admin/members');
+  async getAdminMembers(params?: {
+    search?: string;
+    status?: string;
+    tier?: string;
+    chapter?: string;
+    registrationType?: string;
+  }): Promise<User[]> {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.status && params.status !== 'all') query.set('status', params.status);
+    if (params?.tier && params.tier !== 'all') query.set('tier', params.tier);
+    if (params?.chapter && params.chapter !== 'all') query.set('chapter', params.chapter);
+    if (params?.registrationType && params.registrationType !== 'all') query.set('registrationType', params.registrationType);
+    const qs = query.toString();
+    const data = await this.request<{ members: User[] }>(`/api/admin/members${qs ? `?${qs}` : ''}`);
     return data.members;
   },
 
@@ -205,7 +225,7 @@ export const api = {
 
   async reviewApplication(
     id: string,
-    payload: { action: 'approve' | 'decline'; tier?: MembershipTier; reviewNote?: string }
+    payload: { action: 'approve' | 'reject' | 'decline'; tier?: MembershipTier; reviewNote?: string }
   ) {
     return this.request<{ application: MembershipApplication; user?: User; message: string }>(
       `/api/admin/applications/${id}/review`,

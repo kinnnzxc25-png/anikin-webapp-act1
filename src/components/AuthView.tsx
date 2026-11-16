@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
-import { User, MembershipTier } from '../types';
+import { User, MembershipTier, RegistrationType } from '../types';
 import {
   Lock,
   Mail,
@@ -12,6 +12,8 @@ import {
   ArrowRight,
   ShieldCheck,
   KeyRound,
+  Zap,
+  FileCheck2,
 } from 'lucide-react';
 
 interface AuthViewProps {
@@ -21,7 +23,8 @@ interface AuthViewProps {
 }
 
 const CHAPTERS = ['Manila', 'Tokyo', 'Singapore', 'London', 'New York'];
-const TIERS: MembershipTier[] = ['Executive', 'Founding Circle', 'Patron', 'Associate'];
+const OPEN_TIERS: MembershipTier[] = ['Associate', 'Executive', 'Patron'];
+const APPROVAL_TIERS: MembershipTier[] = ['Executive', 'Founding Circle', 'Patron', 'Associate'];
 
 export const AuthView: React.FC<AuthViewProps> = ({
   initialMode = 'signin',
@@ -29,18 +32,29 @@ export const AuthView: React.FC<AuthViewProps> = ({
   onSuccess,
 }) => {
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [registrationType, setRegistrationType] = useState<RegistrationType>('open');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [chapter, setChapter] = useState('Manila');
-  const [tierRequested, setTierRequested] = useState<MembershipTier>('Executive');
+  const [tierRequested, setTierRequested] = useState<MembershipTier>('Associate');
   const [referralCode, setReferralCode] = useState('');
   const [motivation, setMotivation] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleSelectRegistrationType = (nextType: RegistrationType) => {
+    setRegistrationType(nextType);
+    setError(null);
+    if (nextType === 'open' && tierRequested === 'Founding Circle') {
+      setTierRequested('Associate');
+    } else if (nextType === 'approval' && tierRequested === 'Associate') {
+      setTierRequested('Executive');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,11 +70,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
           email,
           password,
           name,
+          registrationType,
           company,
           title,
           chapter,
           tierRequested,
-          referralCode,
+          referralCode: registrationType === 'approval' ? referralCode : undefined,
           motivation,
         });
         onSuccess(res.user);
@@ -85,10 +100,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
   };
 
+  const availableTiers = registrationType === 'open' ? OPEN_TIERS : APPROVAL_TIERS;
+
   return (
     <div className="min-h-screen bg-[#060911] text-slate-100 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-xl w-full mx-auto">
-        {/* Back link */}
         <div className="mb-6 flex items-center justify-between">
           <button
             type="button"
@@ -104,7 +120,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </span>
         </div>
 
-        {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#0A1120] border border-[#D4AF37]/40 text-[#E7C860] font-display text-lg font-bold mb-3">
             B
@@ -117,9 +132,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </p>
         </div>
 
-        {/* Card Container */}
         <div className="bg-[#0A1120] border border-[#D4AF37]/20 rounded-2xl p-6 sm:p-8 shadow-2xl">
-          {/* Mode Tabs */}
           <div className="flex p-1 bg-[#060911] rounded-xl border border-slate-800 mb-6">
             <button
               type="button"
@@ -152,8 +165,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </div>
 
           {error && (
-            <div className="mb-5 p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200 flex items-start gap-2">
-              <span className="font-bold text-red-400">!</span>
+            <div className="mb-5 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200 flex items-start gap-2">
+              <span className="font-bold text-rose-400">!</span>
               <span>{error}</span>
             </div>
           )}
@@ -161,6 +174,68 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <>
+                {/* Registration Method Selector */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-200 mb-2">
+                    Choose Registration Method
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectRegistrationType('open')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        registrationType === 'open'
+                          ? 'bg-[#060911] border-[#D4AF37] ring-1 ring-[#D4AF37]/40'
+                          : 'bg-[#060911]/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-xs font-bold flex items-center gap-1.5 ${
+                            registrationType === 'open' ? 'text-[#E7C860]' : 'text-white'
+                          }`}
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          Open Membership
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-400">
+                          Instant Active
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                        Immediate activation with a unique Member ID and full community access.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSelectRegistrationType('approval')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        registrationType === 'approval'
+                          ? 'bg-[#060911] border-[#D4AF37] ring-1 ring-[#D4AF37]/40'
+                          : 'bg-[#060911]/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`text-xs font-bold flex items-center gap-1.5 ${
+                            registrationType === 'approval' ? 'text-[#E7C860]' : 'text-white'
+                          }`}
+                        >
+                          <FileCheck2 className="w-3.5 h-3.5" />
+                          Approval-Based
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-300">
+                          Committee Review
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                        Submit an application for admin vetting; unlocks exclusive access once approved.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -235,16 +310,18 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                  <div className={registrationType === 'open' ? 'sm:col-span-2' : ''}>
                     <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                      Membership Tier Requested
+                      {registrationType === 'open'
+                        ? 'Membership Tier'
+                        : 'Membership Tier Requested'}
                     </label>
                     <select
                       value={tierRequested}
                       onChange={(e) => setTierRequested(e.target.value as MembershipTier)}
                       className="w-full px-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
                     >
-                      {TIERS.map((t) => (
+                      {availableTiers.map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
@@ -252,21 +329,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                      Member Referral Code <span className="text-slate-500">(Optional)</span>
-                    </label>
-                    <div className="relative">
-                      <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        value={referralCode}
-                        onChange={(e) => setReferralCode(e.target.value)}
-                        placeholder="e.g. BATB-001"
-                        className="w-full pl-9 pr-3 py-2 text-xs font-mono rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
-                      />
+                  {registrationType === 'approval' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Member Referral Code <span className="text-slate-500">(Optional)</span>
+                      </label>
+                      <div className="relative">
+                        <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value)}
+                          placeholder="e.g. BATB-001"
+                          className="w-full pl-9 pr-3 py-2 text-xs font-mono rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </>
             )}
@@ -317,13 +396,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Brief Introduction & Why You Wish to Join
+                  {registrationType === 'approval'
+                    ? 'Application Statement & Why You Wish to Join'
+                    : 'Brief Bio (Optional)'}
                 </label>
                 <textarea
                   rows={2}
+                  required={registrationType === 'approval'}
                   value={motivation}
                   onChange={(e) => setMotivation(e.target.value)}
-                  placeholder="Share your work, interests, and what brings you to BOY'S AT THE BACK."
+                  placeholder="Share your background, interests, and what brings you to BOY'S AT THE BACK."
                   className="w-full px-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
                 />
               </div>
@@ -339,7 +421,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   ? 'Please wait...'
                   : mode === 'signin'
                   ? 'Sign In to Member Portal'
-                  : 'Submit Membership Application'}
+                  : registrationType === 'open'
+                  ? 'Complete Open Registration'
+                  : 'Submit Approval Application'}
               </span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -352,7 +436,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <span className="text-[11px] text-slate-500">1-Click Preview</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 type="button"
                 onClick={() => handleDemoLogin('admin@boysattheback.club')}
@@ -365,9 +449,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleDemoLogin('member@boysattheback.club')}
-                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-[#D4AF37]/60 text-left transition-colors cursor-pointer"
+                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-emerald-500/50 text-left transition-colors cursor-pointer"
               >
-                <div className="text-xs font-semibold text-white">Active Member</div>
+                <div className="text-xs font-semibold text-emerald-400">Active Member</div>
                 <div className="text-[11px] text-slate-400 truncate mt-0.5">Julian Reyes</div>
               </button>
 
@@ -378,6 +462,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
               >
                 <div className="text-xs font-semibold text-amber-300">Pending Status</div>
                 <div className="text-[11px] text-slate-400 truncate mt-0.5">Dante Alcaraz</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('rejected@velvet.co')}
+                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-rose-500/50 text-left transition-colors cursor-pointer"
+              >
+                <div className="text-xs font-semibold text-rose-400">Rejected Status</div>
+                <div className="text-[11px] text-slate-400 truncate mt-0.5">Victor Soriano</div>
               </button>
             </div>
           </div>

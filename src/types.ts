@@ -1,5 +1,6 @@
-export type MembershipStatus = 'active' | 'pending' | 'suspended' | 'alumni';
+export type MembershipStatus = 'active' | 'pending' | 'rejected' | 'suspended' | 'alumni';
 export type MembershipTier = 'Founding Circle' | 'Executive' | 'Patron' | 'Associate';
+export type RegistrationType = 'open' | 'approval';
 export type UserRole = 'admin' | 'member' | 'freelancer' | 'client';
 
 export interface User {
@@ -12,6 +13,7 @@ export interface User {
   chapter?: string;
   membershipStatus: MembershipStatus;
   membershipTier: MembershipTier;
+  registrationType?: RegistrationType;
   memberNumber: string;
   bio?: string;
   phone?: string;
@@ -48,7 +50,7 @@ export interface MembershipApplication {
   tierRequested: MembershipTier;
   motivation: string;
   referralCode?: string;
-  status: 'pending' | 'approved' | 'declined';
+  status: 'pending' | 'approved' | 'rejected' | 'declined';
   reviewNote?: string;
   submittedAt: string;
   reviewedAt?: string;
@@ -70,6 +72,8 @@ export interface Announcement {
 export interface AdminOverview {
   totalMembers: number;
   activeMembers: number;
+  pendingMembers: number;
+  rejectedMembers: number;
   pendingApplications: number;
   suspendedMembers: number;
   announcementsCount: number;

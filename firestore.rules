@@ -39,6 +39,8 @@ service cloud.firestore {
         data.email is string && data.email.size() <= 255 &&
         data.name is string && data.name.size() <= 128 &&
         data.role in ['admin', 'member', 'freelancer', 'client'] &&
+        (!('membershipStatus' in data) || data.membershipStatus in ['active', 'pending', 'rejected', 'suspended', 'alumni']) &&
+        (!('registrationType' in data) || data.registrationType in ['open', 'approval']) &&
         data.createdAt is string && data.createdAt.size() <= 64;
     }
 
@@ -49,7 +51,7 @@ service cloud.firestore {
         data.applicantName is string && data.applicantName.size() <= 128 &&
         data.applicantEmail is string && data.applicantEmail.size() <= 255 &&
         data.tierRequested in ['Founding Circle', 'Executive', 'Patron', 'Associate'] &&
-        data.status in ['pending', 'approved', 'declined'] &&
+        data.status in ['pending', 'approved', 'rejected', 'declined'] &&
         data.submittedAt is string && data.submittedAt.size() <= 64;
     }
 
@@ -87,22 +89,35 @@ service cloud.firestore {
         data.category in ['image', 'document', 'design', 'archive', 'other'];
     }
 
+    function isActiveMember() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.membershipStatus == 'active')
+      );
+    }
+
     // Users Collection (PII protected: own profile, directory-opted active members, or admin)
     match /users/{userId} {
       allow get: if isSignedIn() && (
         request.auth.uid == userId ||
         resource.data.id == request.auth.uid ||
         isAdmin() ||
-        (resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
+        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
       );
       allow list: if isSignedIn() && (
         resource.data.id == request.auth.uid ||
         isAdmin() ||
-        (resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
+        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
       );
       allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) &&
         (incoming().id == request.auth.uid || userId == request.auth.uid) &&
-        incoming().role == 'member';
+        incoming().role == 'member' &&
+        (
+          (!('registrationType' in incoming()) && incoming().membershipStatus == 'pending') ||
+          (incoming().registrationType == 'open' && incoming().membershipStatus == 'active') ||
+          (incoming().registrationType == 'approval' && incoming().membershipStatus == 'pending')
+        );
       allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
         isAdmin() ||
         (existing().id == request.auth.uid && incoming().id == existing().id && incoming().role == existing().role && incoming().membershipStatus == existing().membershipStatus && incoming().membershipTier == existing().membershipTier)
@@ -119,10 +134,10 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(applicationId);
     }
 
-    // Announcements Collection
+    // Announcements Collection (exclusive to approved/active members and admins)
     match /announcements/{announcementId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get: if isActiveMember();
+      allow list: if isActiveMember();
       allow create: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
       allow update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
       allow delete: if isAdmin() && isValidId(announcementId);

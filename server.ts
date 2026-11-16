@@ -75,8 +75,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Types
-export type MembershipStatus = 'active' | 'pending' | 'suspended' | 'alumni';
+export type MembershipStatus = 'active' | 'pending' | 'rejected' | 'suspended' | 'alumni';
 export type MembershipTier = 'Founding Circle' | 'Executive' | 'Patron' | 'Associate';
+export type RegistrationType = 'open' | 'approval';
 export type UserRole = 'admin' | 'member' | 'freelancer' | 'client';
 
 export interface User {
@@ -91,6 +92,7 @@ export interface User {
   chapter?: string;
   membershipStatus: MembershipStatus;
   membershipTier: MembershipTier;
+  registrationType?: RegistrationType;
   memberNumber: string;
   bio?: string;
   phone?: string;
@@ -112,7 +114,7 @@ export interface MembershipApplication {
   tierRequested: MembershipTier;
   motivation: string;
   referralCode?: string;
-  status: 'pending' | 'approved' | 'declined';
+  status: 'pending' | 'approved' | 'rejected' | 'declined';
   reviewNote?: string;
   submittedAt: string;
   reviewedAt?: string;
@@ -324,12 +326,31 @@ function buildSeedUsers(): User[] {
       chapter: 'Manila',
       membershipStatus: 'pending',
       membershipTier: 'Executive',
+      registrationType: 'approval',
       memberNumber: 'BATB-PEND',
       bio: 'Early-stage investor backing design-led consumer brands and fintech founders in Southeast Asia.',
       phone: '+63 917 555 0884',
       interests: ['Venture Capital', 'Contemporary Art', 'Espresso'],
       isPublicInDirectory: false,
       createdAt: '2026-11-12T08:00:00.000Z',
+    }),
+    mkUser({
+      id: 'user_rejected_1',
+      email: 'rejected@velvet.co',
+      name: 'Victor Soriano',
+      role: 'member',
+      company: 'Velvet Media Group',
+      title: 'Managing Director',
+      chapter: 'Singapore',
+      membershipStatus: 'rejected',
+      membershipTier: 'Founding Circle',
+      registrationType: 'approval',
+      memberNumber: 'BATB-REJ',
+      bio: 'Brand partnerships and experiential hospitality across APAC.',
+      phone: '+65 9888 1204',
+      interests: ['Hospitality', 'Media'],
+      isPublicInDirectory: false,
+      createdAt: '2026-11-08T10:00:00.000Z',
     }),
   ];
 }
@@ -365,6 +386,21 @@ function buildSeedApplications(): MembershipApplication[] {
       reviewNote: 'Vouched by Arthur Sterling. Welcomed to Tokyo Chapter.',
       submittedAt: '2026-01-12T10:00:00.000Z',
       reviewedAt: '2026-01-15T12:00:00.000Z',
+    },
+    {
+      id: 'app_seed_3',
+      userId: 'user_rejected_1',
+      applicantName: 'Victor Soriano',
+      applicantEmail: 'rejected@velvet.co',
+      company: 'Velvet Media Group',
+      title: 'Managing Director',
+      chapter: 'Singapore',
+      tierRequested: 'Founding Circle',
+      motivation: 'Applying directly for Founding Circle access in Singapore.',
+      status: 'rejected',
+      reviewNote: 'Founding Circle currently requires two existing chapter sponsors. You may re-apply under Open Membership or Associate.',
+      submittedAt: '2026-11-08T10:00:00.000Z',
+      reviewedAt: '2026-11-10T15:30:00.000Z',
     },
   ];
 }
@@ -418,9 +454,18 @@ function buildSeedAnnouncements(): Announcement[] {
   ];
 }
 
+const SEED_EMAILS = [
+  'admin@boysattheback.club',
+  'member@boysattheback.club',
+  'architect@boysattheback.club',
+  'designer@tambyus.com',
+  'client@acmelabs.io',
+  'applicant@horizon.co',
+  'rejected@velvet.co',
+];
+
 // Seed & Migrate Database safely
 function initDatabase(): DatabaseSchema {
-  const seedUsers = buildSeedUsers();
   const seedApps = buildSeedApplications();
   const seedAnns = buildSeedAnnouncements();
 
@@ -533,22 +578,40 @@ function initDatabase(): DatabaseSchema {
           joinedAt: u.joinedAt || u.createdAt,
         }));
 
-        // Ensure core seeded accounts exist if not already present
-        for (const su of seedUsers) {
-          if (!migratedUsers.some((u) => u.email.toLowerCase() === su.email.toLowerCase())) {
-            migratedUsers.push(su);
+        // Ensure core seeded accounts exist if not already present (avoid scrypt work when already seeded)
+        const existingEmails = new Set(migratedUsers.map((u) => u.email.toLowerCase()));
+        const missingSeed = SEED_EMAILS.some((email) => !existingEmails.has(email));
+        if (missingSeed) {
+          const seedUsers = buildSeedUsers();
+          for (const su of seedUsers) {
+            if (!existingEmails.has(su.email.toLowerCase())) {
+              migratedUsers.push(su);
+            }
+          }
+        }
+
+        const existingAppIds = new Set((existingData.applications || []).map((a) => a.id));
+        const mergedApps = [...(existingData.applications || [])];
+        for (const sa of seedApps) {
+          if (!existingAppIds.has(sa.id)) {
+            mergedApps.push(sa);
           }
         }
 
         const migrated: DatabaseSchema = {
-          users: migratedUsers,
-          applications: existingData.applications && existingData.applications.length > 0 ? existingData.applications : seedApps,
+          users: migratedUsers.map((u) => ({
+            ...u,
+            registrationType: u.registrationType || (u.membershipStatus === 'pending' || u.membershipStatus === 'rejected' ? 'approval' : 'approval'),
+          })),
+          applications: mergedApps.length > 0 ? mergedApps : seedApps,
           announcements: existingData.announcements && existingData.announcements.length > 0 ? existingData.announcements : seedAnns,
           portals: existingData.portals && existingData.portals.length > 0 ? existingData.portals : [portal1, portal2],
           files: existingData.files.length > 0 ? existingData.files : sampleFilesData,
           sessions: existingData.sessions || [],
         };
-        fs.writeFileSync(DB_FILE, JSON.stringify(migrated, null, 2), 'utf-8');
+        if (missingSeed || mergedApps.length !== (existingData.applications || []).length || !existingData.announcements) {
+          fs.writeFileSync(DB_FILE, JSON.stringify(migrated, null, 2), 'utf-8');
+        }
         return migrated;
       }
     } catch {
@@ -556,6 +619,7 @@ function initDatabase(): DatabaseSchema {
     }
   }
 
+  const seedUsers = buildSeedUsers();
   const db: DatabaseSchema = {
     users: seedUsers,
     applications: seedApps,
@@ -608,12 +672,46 @@ function authenticate(req: express.Request, res: express.Response, next: express
   next();
 }
 
+function generateUniqueMemberNumber(): string {
+  const existingNumbers = new Set(db.users.map((u) => u.memberNumber.toUpperCase()));
+  let maxSeq = 20;
+  for (const u of db.users) {
+    const match = /^BATB-(\d+)$/i.exec(u.memberNumber);
+    if (match) {
+      const n = parseInt(match[1], 10);
+      if (n > maxSeq) maxSeq = n;
+    }
+  }
+  let candidateNum = maxSeq + 1;
+  while (existingNumbers.has(`BATB-${String(candidateNum).padStart(3, '0')}`)) {
+    candidateNum++;
+  }
+  return `BATB-${String(candidateNum).padStart(3, '0')}`;
+}
+
 function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = (req as any).user as User;
   if (!user || user.role !== 'admin') {
     return res.status(403).json({ error: 'Administrator privileges required.' });
   }
   next();
+}
+
+function requireActiveMember(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const user = (req as any).user as User;
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  if (user.role === 'admin' || user.membershipStatus === 'active') {
+    return next();
+  }
+  if (user.membershipStatus === 'pending') {
+    return res.status(403).json({ error: 'Your membership application is pending approval. Exclusive features unlock once approved.' });
+  }
+  if (user.membershipStatus === 'rejected') {
+    return res.status(403).json({ error: 'Your membership application was not approved. Exclusive member access is restricted.' });
+  }
+  return res.status(403).json({ error: 'Active membership standing is required to access exclusive member features.' });
 }
 
 // -------------------------------------------------------------
@@ -625,6 +723,7 @@ app.post('/api/auth/register', (req, res) => {
     email,
     password,
     name,
+    registrationType = 'approval',
     company = '',
     title = '',
     chapter = 'Manila',
@@ -647,12 +746,18 @@ app.post('/api/auth/register', (req, res) => {
     return res.status(400).json({ error: 'An account with this email already exists. Please sign in instead.' });
   }
 
-  const validTier: MembershipTier = ['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tierRequested)
-    ? tierRequested
-    : 'Executive';
+  const regType: RegistrationType = registrationType === 'open' ? 'open' : 'approval';
+
+  const validTier: MembershipTier =
+    regType === 'open'
+      ? (['Executive', 'Patron', 'Associate'].includes(tierRequested) ? tierRequested : 'Associate')
+      : (['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tierRequested) ? tierRequested : 'Executive');
 
   const salt = crypto.randomBytes(16).toString('hex');
   const now = new Date().toISOString();
+  const isOpen = regType === 'open';
+  const assignedMemberNumber = isOpen ? generateUniqueMemberNumber() : 'BATB-PEND';
+
   const newUser: User = {
     id: `user_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
     email: normalizedEmail,
@@ -661,34 +766,39 @@ app.post('/api/auth/register', (req, res) => {
     name: name.trim(),
     role: 'member',
     company: company.trim() || 'Independent Venture',
-    title: title.trim() || 'Prospective Member',
+    title: title.trim() || (isOpen ? 'Member' : 'Prospective Member'),
     chapter: chapter.trim() || 'Manila',
-    membershipStatus: 'pending',
+    membershipStatus: isOpen ? 'active' : 'pending',
     membershipTier: validTier,
-    memberNumber: 'BATB-PEND',
-    bio: motivation.trim() || 'New applicant to BOY\'S AT THE BACK.',
+    registrationType: regType,
+    memberNumber: assignedMemberNumber,
+    bio: motivation.trim() || (isOpen ? 'Open-enrollment member at BOY\'S AT THE BACK.' : 'New applicant to BOY\'S AT THE BACK.'),
     interests: ['Networking', 'Private Salons'],
-    isPublicInDirectory: false,
+    isPublicInDirectory: isOpen,
     createdAt: now,
+    joinedAt: isOpen ? now : undefined,
   };
 
-  const application: MembershipApplication = {
-    id: `app_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
-    userId: newUser.id,
-    applicantName: newUser.name,
-    applicantEmail: newUser.email,
-    company: newUser.company,
-    title: newUser.title || 'Member Applicant',
-    chapter: newUser.chapter || 'Manila',
-    tierRequested: validTier,
-    motivation: motivation.trim() || 'Interested in joining the community and attending private chapter salons.',
-    referralCode: referralCode.trim() || undefined,
-    status: 'pending',
-    submittedAt: now,
-  };
+  let createdApplication: MembershipApplication | undefined;
+  if (!isOpen) {
+    createdApplication = {
+      id: `app_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`,
+      userId: newUser.id,
+      applicantName: newUser.name,
+      applicantEmail: newUser.email,
+      company: newUser.company,
+      title: newUser.title || 'Member Applicant',
+      chapter: newUser.chapter || 'Manila',
+      tierRequested: validTier,
+      motivation: motivation.trim() || 'Interested in joining the community and attending private chapter salons.',
+      referralCode: referralCode.trim() || undefined,
+      status: 'pending',
+      submittedAt: now,
+    };
+    db.applications.unshift(createdApplication);
+  }
 
   db.users.push(newUser);
-  db.applications.unshift(application);
 
   const token = crypto.randomBytes(32).toString('hex');
   db.sessions.push({
@@ -701,13 +811,17 @@ app.post('/api/auth/register', (req, res) => {
 
   const safeUser = sanitizeUser(newUser);
   syncToFirestore('users', newUser.id, safeUser);
-  syncToFirestore('applications', application.id, application);
+  if (createdApplication) {
+    syncToFirestore('applications', createdApplication.id, createdApplication);
+  }
 
   return res.json({
     token,
     user: safeUser,
-    application,
-    message: 'Membership application submitted! Your profile is currently pending committee review.',
+    application: createdApplication,
+    message: isOpen
+      ? `Welcome to BOY'S AT THE BACK! Your Open Membership is active (${assignedMemberNumber}).`
+      : 'Membership application submitted! Your profile is currently pending committee review.',
   });
 });
 
@@ -750,7 +864,14 @@ app.post('/api/auth/logout', authenticate, (req, res) => {
 
 app.get('/api/auth/me', authenticate, (req, res) => {
   const user = (req as any).user as User;
-  return res.json({ user: sanitizeUser(user) });
+  const application = db.applications.find((a) => a.userId === user.id) || null;
+  return res.json({ user: sanitizeUser(user), application });
+});
+
+app.get('/api/membership/my-application', authenticate, (req, res) => {
+  const user = (req as any).user as User;
+  const application = db.applications.find((a) => a.userId === user.id) || null;
+  return res.json({ application });
 });
 
 // -------------------------------------------------------------
@@ -792,7 +913,7 @@ app.patch('/api/profile', authenticate, (req, res) => {
   });
 });
 
-app.get('/api/members/directory', authenticate, (req, res) => {
+app.get('/api/members/directory', authenticate, requireActiveMember, (req, res) => {
   const { search, chapter, tier } = req.query;
 
   let members = db.users.filter(
@@ -842,7 +963,7 @@ app.get('/api/members/directory', authenticate, (req, res) => {
 // Announcements Endpoints
 // -------------------------------------------------------------
 
-app.get('/api/announcements', authenticate, (req, res) => {
+app.get('/api/announcements', authenticate, requireActiveMember, (req, res) => {
   const { category } = req.query;
   let list = [...db.announcements];
 
@@ -932,6 +1053,8 @@ app.delete('/api/announcements/:id', authenticate, requireAdmin, (req, res) => {
 app.get('/api/admin/overview', authenticate, requireAdmin, (_req, res) => {
   const totalMembers = db.users.length;
   const activeMembers = db.users.filter((u) => u.membershipStatus === 'active').length;
+  const pendingMembers = db.users.filter((u) => u.membershipStatus === 'pending').length;
+  const rejectedMembers = db.users.filter((u) => u.membershipStatus === 'rejected').length;
   const pendingApplications = db.applications.filter((a) => a.status === 'pending').length;
   const suspendedMembers = db.users.filter((u) => u.membershipStatus === 'suspended').length;
 
@@ -945,6 +1068,8 @@ app.get('/api/admin/overview', authenticate, requireAdmin, (_req, res) => {
   return res.json({
     totalMembers,
     activeMembers,
+    pendingMembers,
+    rejectedMembers,
     pendingApplications,
     suspendedMembers,
     announcementsCount: db.announcements.length,
@@ -953,10 +1078,36 @@ app.get('/api/admin/overview', authenticate, requireAdmin, (_req, res) => {
   });
 });
 
-app.get('/api/admin/members', authenticate, requireAdmin, (_req, res) => {
-  const members = db.users
-    .map((u) => sanitizeUser(u))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+app.get('/api/admin/members', authenticate, requireAdmin, (req, res) => {
+  const { search, status, tier, chapter, registrationType } = req.query;
+
+  let members = db.users.map((u) => sanitizeUser(u));
+
+  if (typeof status === 'string' && status !== 'all' && status.trim()) {
+    members = members.filter((m) => m.membershipStatus === status.trim());
+  }
+  if (typeof tier === 'string' && tier !== 'all' && tier.trim()) {
+    members = members.filter((m) => m.membershipTier === tier.trim());
+  }
+  if (typeof chapter === 'string' && chapter !== 'all' && chapter.trim()) {
+    members = members.filter((m) => (m.chapter || '').toLowerCase() === chapter.trim().toLowerCase());
+  }
+  if (typeof registrationType === 'string' && registrationType !== 'all' && registrationType.trim()) {
+    members = members.filter((m) => (m.registrationType || 'approval') === registrationType.trim());
+  }
+  if (typeof search === 'string' && search.trim()) {
+    const q = search.trim().toLowerCase();
+    members = members.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        m.memberNumber.toLowerCase().includes(q) ||
+        (m.company || '').toLowerCase().includes(q) ||
+        (m.title || '').toLowerCase().includes(q)
+    );
+  }
+
+  members.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return res.json({ members });
 });
 
@@ -969,13 +1120,16 @@ app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
 
   const { membershipStatus, membershipTier, role, chapter, memberNumber } = req.body;
 
-  if (['active', 'pending', 'suspended', 'alumni'].includes(membershipStatus)) {
+  if (['active', 'pending', 'rejected', 'suspended', 'alumni'].includes(membershipStatus)) {
     member.membershipStatus = membershipStatus;
-    if (membershipStatus === 'active' && member.memberNumber === 'BATB-PEND') {
-      const nextNum = db.users.filter((u) => u.memberNumber.startsWith('BATB-0')).length + 20;
-      member.memberNumber = `BATB-${String(nextNum).padStart(3, '0')}`;
+    if (membershipStatus === 'active') {
+      if (!member.memberNumber || member.memberNumber === 'BATB-PEND' || member.memberNumber === 'BATB-REJ') {
+        member.memberNumber = generateUniqueMemberNumber();
+      }
       member.joinedAt = member.joinedAt || new Date().toISOString();
       member.isPublicInDirectory = true;
+    } else if (membershipStatus === 'rejected' || membershipStatus === 'suspended') {
+      member.isPublicInDirectory = false;
     }
   }
   if (['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(membershipTier)) {
@@ -1014,32 +1168,33 @@ app.post('/api/admin/applications/:id/review', authenticate, requireAdmin, (req,
     return res.status(404).json({ error: 'Application not found.' });
   }
 
-  if (action !== 'approve' && action !== 'decline') {
-    return res.status(400).json({ error: 'Action must be "approve" or "decline".' });
+  if (action !== 'approve' && action !== 'reject' && action !== 'decline') {
+    return res.status(400).json({ error: 'Action must be "approve" or "reject".' });
   }
 
+  const isApprove = action === 'approve';
   const now = new Date().toISOString();
-  application.status = action === 'approve' ? 'approved' : 'declined';
+  application.status = isApprove ? 'approved' : 'rejected';
   application.reviewedAt = now;
   application.reviewNote = String(reviewNote || '').trim().slice(0, 1024) || undefined;
 
-  if (action === 'approve' && ['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tier)) {
+  if (isApprove && ['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(tier)) {
     application.tierRequested = tier;
   }
 
   const linkedUser = db.users.find((u) => u.id === application.userId);
   if (linkedUser) {
-    if (action === 'approve') {
+    if (isApprove) {
       linkedUser.membershipStatus = 'active';
       linkedUser.membershipTier = application.tierRequested;
       linkedUser.joinedAt = now;
       linkedUser.isPublicInDirectory = true;
-      if (!linkedUser.memberNumber || linkedUser.memberNumber === 'BATB-PEND') {
-        const activeCount = db.users.filter((u) => /^BATB-\d+$/.test(u.memberNumber)).length + 21;
-        linkedUser.memberNumber = `BATB-${String(activeCount).padStart(3, '0')}`;
+      if (!linkedUser.memberNumber || linkedUser.memberNumber === 'BATB-PEND' || linkedUser.memberNumber === 'BATB-REJ') {
+        linkedUser.memberNumber = generateUniqueMemberNumber();
       }
     } else {
-      linkedUser.membershipStatus = 'suspended';
+      linkedUser.membershipStatus = 'rejected';
+      linkedUser.memberNumber = 'BATB-REJ';
       linkedUser.isPublicInDirectory = false;
     }
     syncToFirestore('users', linkedUser.id, sanitizeUser(linkedUser));
@@ -1051,10 +1206,9 @@ app.post('/api/admin/applications/:id/review', authenticate, requireAdmin, (req,
   return res.json({
     application,
     user: linkedUser ? sanitizeUser(linkedUser) : undefined,
-    message:
-      action === 'approve'
-        ? `Approved ${application.applicantName} into ${application.tierRequested}.`
-        : `Declined application for ${application.applicantName}.`,
+    message: isApprove
+      ? `Approved ${application.applicantName} into ${application.tierRequested} (${linkedUser?.memberNumber || 'Active'}).`
+      : `Rejected application for ${application.applicantName}.`,
   });
 });
 
@@ -1062,7 +1216,7 @@ app.post('/api/admin/applications/:id/review', authenticate, requireAdmin, (req,
 // Preserved Member Vault: Files & Portals Endpoints
 // -------------------------------------------------------------
 
-app.get('/api/files', authenticate, (req, res) => {
+app.get('/api/files', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
   const { category, search, portalId, sortBy = 'date_desc' } = req.query;
 
@@ -1106,7 +1260,7 @@ app.get('/api/files', authenticate, (req, res) => {
   return res.json({ files: userFiles });
 });
 
-app.post('/api/files/upload', authenticate, upload.array('files', 15), (req, res) => {
+app.post('/api/files/upload', authenticate, requireActiveMember, upload.array('files', 15), (req, res) => {
   const user = (req as any).user as User;
   const files = req.files as Express.Multer.File[];
   const { portalId, notes } = req.body;
@@ -1195,7 +1349,7 @@ app.get('/api/files/:id/preview', (req, res) => {
   return res.sendFile(filePath);
 });
 
-app.patch('/api/files/:id', authenticate, (req, res) => {
+app.patch('/api/files/:id', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
   const { id } = req.params;
   const { notes, originalName, isStarred } = req.body;
@@ -1218,7 +1372,7 @@ app.patch('/api/files/:id', authenticate, (req, res) => {
   return res.json({ file, message: 'File details updated.' });
 });
 
-app.delete('/api/files/:id', authenticate, (req, res) => {
+app.delete('/api/files/:id', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
   const { id } = req.params;
 
@@ -1249,7 +1403,7 @@ app.delete('/api/files/:id', authenticate, (req, res) => {
   return res.json({ message: `"${file.originalName}" was permanently deleted.` });
 });
 
-app.get('/api/portals', authenticate, (req, res) => {
+app.get('/api/portals', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
 
   let portals: ClientPortal[];
@@ -1274,7 +1428,7 @@ app.get('/api/portals', authenticate, (req, res) => {
   return res.json({ portals: enriched });
 });
 
-app.post('/api/portals', authenticate, (req, res) => {
+app.post('/api/portals', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
   const { clientName, clientEmail, projectName, description } = req.body;
 
@@ -1398,7 +1552,7 @@ app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, re
   });
 });
 
-app.get('/api/stats', authenticate, (req, res) => {
+app.get('/api/stats', authenticate, requireActiveMember, (req, res) => {
   const user = (req as any).user as User;
 
   const userFiles = user.role === 'admin'
@@ -1427,17 +1581,29 @@ app.get('/api/stats', authenticate, (req, res) => {
   });
 });
 
+app.get('/api/health', (_req, res) => {
+  return res.json({ status: 'ok' });
+});
+
 // -------------------------------------------------------------
 // Frontend Vite Middleware & Static Serving
 // -------------------------------------------------------------
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
-    const { createServer } = await import('vite');
-    const vite = await createServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+    const vitePromise = import('vite').then(({ createServer }) =>
+      createServer({
+        server: { middlewareMode: true, hmr: false },
+        appType: 'spa',
+      })
+    );
+    app.use(async (req, res, next) => {
+      try {
+        const vite = await vitePromise;
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
-    app.use(vite.middlewares);
   } else {
     app.use(express.static('dist'));
     app.get('*', (_req, res) => {

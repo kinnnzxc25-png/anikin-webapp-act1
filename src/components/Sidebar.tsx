@@ -1,5 +1,6 @@
 import React from 'react';
 import { User } from '../types';
+import { MembershipStatusBadge } from './MembershipStatusBadge';
 import {
   LayoutDashboard,
   Megaphone,
@@ -9,6 +10,7 @@ import {
   Shield,
   LogOut,
   X,
+  Lock,
 } from 'lucide-react';
 
 export type DashboardTab =
@@ -40,12 +42,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen,
   onCloseMobile,
 }) => {
+  const hasExclusiveAccess = user.role === 'admin' || user.membershipStatus === 'active';
+
   const navItems: Array<{
     id: DashboardTab;
     label: string;
     icon: React.ReactNode;
     badge?: number;
     adminOnly?: boolean;
+    exclusive?: boolean;
   }> = [
     {
       id: 'overview',
@@ -56,12 +61,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'announcements',
       label: 'Announcements',
       icon: <Megaphone className="w-4 h-4" />,
-      badge: announcementsCount > 0 ? announcementsCount : undefined,
+      badge: hasExclusiveAccess && announcementsCount > 0 ? announcementsCount : undefined,
+      exclusive: true,
     },
     {
       id: 'directory',
       label: 'Member Directory',
       icon: <Users className="w-4 h-4" />,
+      exclusive: true,
     },
     {
       id: 'profile',
@@ -72,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'vault',
       label: 'Member Vault',
       icon: <FolderLock className="w-4 h-4" />,
+      exclusive: true,
     },
     {
       id: 'admin',
@@ -86,22 +94,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setActiveTab(tab);
     onCloseMobile();
   };
-
-  const statusColor =
-    user.membershipStatus === 'active'
-      ? 'text-emerald-400'
-      : user.membershipStatus === 'pending'
-      ? 'text-amber-400'
-      : 'text-rose-400';
-
-  const statusLabel =
-    user.membershipStatus === 'active'
-      ? 'Active Member'
-      : user.membershipStatus === 'pending'
-      ? 'Pending Review'
-      : user.membershipStatus === 'alumni'
-      ? 'Alumni'
-      : 'Suspended';
 
   const sidebarContent = (
     <aside className="w-68 bg-[#060911] text-slate-300 flex flex-col h-full border-r border-[#D4AF37]/15 select-none">
@@ -127,13 +119,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Member Credential Strip */}
       <div className="mx-4 mt-4 p-3.5 rounded-xl bg-[#0A1120] border border-[#D4AF37]/20">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="font-mono text-[#E7C860] font-semibold tabular-nums">
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="font-mono text-[#E7C860] font-semibold tabular-nums truncate">
             {user.memberNumber}
           </span>
-          <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+          <MembershipStatusBadge status={user.membershipStatus} size="sm" />
         </div>
-        <div className="text-xs font-semibold text-white mt-1 truncate">
+        <div className="text-xs font-semibold text-white mt-2 truncate">
           {user.membershipTier}
         </div>
         <div className="text-[11px] text-slate-400 mt-0.5">
@@ -147,6 +139,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           .filter((item) => !item.adminOnly || user.role === 'admin')
           .map((item) => {
             const isActive = activeTab === item.id;
+            const isLocked = Boolean(item.exclusive && !hasExclusiveAccess);
+
             return (
               <button
                 key={item.id}
@@ -154,6 +148,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
                   isActive
                     ? 'bg-[#0A1120] text-[#E7C860] border border-[#D4AF37]/30 font-semibold'
+                    : isLocked
+                    ? 'text-slate-500 hover:text-slate-300 hover:bg-[#0A1120]/40 border border-transparent'
                     : 'text-slate-400 hover:text-slate-100 hover:bg-[#0A1120]/60 border border-transparent'
                 }`}
               >
@@ -163,16 +159,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                   <span>{item.label}</span>
                 </span>
-                {item.badge !== undefined && (
-                  <span
-                    className={`font-mono text-[11px] px-1.5 py-0.5 rounded tabular-nums ${
-                      item.id === 'admin'
-                        ? 'bg-[#D4AF37] text-[#060911] font-bold'
-                        : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
+                {isLocked ? (
+                  <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                ) : (
+                  item.badge !== undefined && (
+                    <span
+                      className={`font-mono text-[11px] px-1.5 py-0.5 rounded tabular-nums ${
+                        item.id === 'admin'
+                          ? 'bg-[#D4AF37] text-[#060911] font-bold'
+                          : 'bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )
                 )}
               </button>
             );
@@ -219,10 +219,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Fixed Sidebar */}
       <div className="hidden lg:block h-screen shrink-0">{sidebarContent}</div>
 
-      {/* Mobile Slide-Over Drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div

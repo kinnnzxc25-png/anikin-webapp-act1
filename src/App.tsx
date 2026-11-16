@@ -8,6 +8,7 @@ import './lib/firebase';
 import { api } from './services/api';
 import {
   User,
+  MembershipApplication,
   Announcement,
   DirectoryMember,
   StoredFile,
@@ -23,6 +24,7 @@ import { AnnouncementsView } from './components/AnnouncementsView';
 import { MemberDirectoryView } from './components/MemberDirectoryView';
 import { MemberProfileView } from './components/MemberProfileView';
 import { AdminDashboardView } from './components/AdminDashboardView';
+import { MembershipStatusBadge } from './components/MembershipStatusBadge';
 import { UploadDropzone } from './components/UploadDropzone';
 import { FileList } from './components/FileList';
 import { ClientPortalsView } from './components/ClientPortalsView';
@@ -39,10 +41,13 @@ import {
   Upload,
   LayoutGrid,
   List,
+  Lock,
+  Shield,
 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [myApplication, setMyApplication] = useState<MembershipApplication | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [publicView, setPublicView] = useState<'landing' | 'auth'>('landing');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -115,8 +120,9 @@ export default function App() {
         return;
       }
       try {
-        const user = await api.getCurrentUser();
+        const { user, application } = await api.getCurrentUser();
         setCurrentUser(user);
+        setMyApplication(application || null);
       } catch {
         api.clearToken();
       } finally {
@@ -129,14 +135,35 @@ export default function App() {
   // Load Membership + Preserved Vault Data
   const loadDashboardData = useCallback(async () => {
     if (!currentUser) return;
+    const isApprovedOrAdmin =
+      currentUser.role === 'admin' || currentUser.membershipStatus === 'active';
+
+    if (!isApprovedOrAdmin) {
+      setAnnouncements([]);
+      setDirectoryMembers([]);
+      setFiles([]);
+      setPortals([]);
+      setStats(null);
+      setPendingApplicationsCount(0);
+      setDirectoryLoading(false);
+      try {
+        const app = await api.getMyApplication();
+        setMyApplication(app);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+
     setDirectoryLoading(true);
     try {
-      const [annRes, dirRes, filesRes, portalsRes, statsRes] = await Promise.all([
+      const [annRes, dirRes, filesRes, portalsRes, statsRes, appRes] = await Promise.all([
         api.getAnnouncements(),
         api.getDirectory(),
         api.getFiles({ category: activeCategory, search: searchQuery, sortBy }),
         api.getPortals(),
         api.getStats(),
+        api.getMyApplication().catch(() => null),
       ]);
 
       setAnnouncements(annRes);
@@ -144,6 +171,7 @@ export default function App() {
       setFiles(filesRes);
       setPortals(portalsRes);
       setStats(statsRes);
+      setMyApplication(appRes);
 
       if (currentUser.role === 'admin') {
         const ov = await api.getAdminOverview().catch(() => null);
@@ -168,6 +196,7 @@ export default function App() {
   const handleSignOut = async () => {
     await api.logout();
     setCurrentUser(null);
+    setMyApplication(null);
     setPublicView('landing');
     setActiveTab('overview');
     setAnnouncements([]);
@@ -279,8 +308,12 @@ export default function App() {
         onBackToLanding={() => setPublicView('landing')}
         onSuccess={(user) => {
           setCurrentUser(user);
-          setActiveTab(user.role === 'admin' ? 'overview' : 'overview');
-          showToast(`Welcome back, ${user.name}.`);
+          setActiveTab('overview');
+          showToast(
+            user.membershipStatus === 'pending'
+              ? `Application received, ${user.name}. Your status is Pending review.`
+              : `Welcome, ${user.name}.`
+          );
         }}
       />
     );
@@ -313,6 +346,12 @@ export default function App() {
     },
   };
 
+  const hasExclusiveAccess =
+    currentUser.role === 'admin' || currentUser.membershipStatus === 'active';
+
+  const isExclusiveTab =
+    activeTab === 'announcements' || activeTab === 'directory' || activeTab === 'vault';
+
   return (
     <div className="flex h-screen bg-[#060911] text-slate-100 overflow-hidden">
       <Sidebar
@@ -333,7 +372,7 @@ export default function App() {
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onSignOut={handleSignOut}
           rightAction={
-            activeTab === 'vault' ? (
+            activeTab === 'vault' && hasExclusiveAccess ? (
               <button
                 onClick={() => setShowUploadModal((v) => !v)}
                 className="inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-lg bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] text-xs font-bold transition-colors whitespace-nowrap cursor-pointer"
@@ -349,6 +388,7 @@ export default function App() {
           {activeTab === 'overview' && (
             <MemberOverview
               user={currentUser}
+              application={myApplication}
               announcements={announcements}
               directoryCount={directoryMembers.length}
               stats={stats}
@@ -356,7 +396,55 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'announcements' && (
+          {isExclusiveTab && !hasExclusiveAccess && (
+            <div className="bg-[#0A1120] border border-[#D4AF37]/30 rounded-2xl p-8 sm:p-10 max-w-2xl mx-auto text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#060911] border border-slate-800 mx-auto">
+                <Lock className="w-5 h-5 text-[#E7C860]" />
+              </div>
+
+              <div className="flex justify-center">
+                <MembershipStatusBadge status={currentUser.membershipStatus} size="md" />
+              </div>
+
+              <h2 className="font-display text-2xl font-semibold text-white">
+                Exclusive Member Access Required
+              </h2>
+
+              <p className="text-xs text-slate-300 leading-relaxed max-w-lg mx-auto">
+                {currentUser.membershipStatus === 'pending'
+                  ? 'Your approval-based membership application is currently Pending review by chapter administrators. House Announcements, the Member Directory, and the Member Vault unlock automatically once approved.'
+                  : currentUser.membershipStatus === 'rejected'
+                  ? 'Your membership application was marked Rejected. Exclusive member sections remain restricted to active members in good standing.'
+                  : 'Exclusive community features are reserved for members with Active standing.'}
+              </p>
+
+              {myApplication?.reviewNote && (
+                <div className="bg-[#060911] border border-slate-800 rounded-xl p-4 text-left text-xs text-slate-300 max-w-lg mx-auto">
+                  <div className="text-[11px] font-semibold text-[#E7C860] mb-1">
+                    Committee Note
+                  </div>
+                  {myApplication.reviewNote}
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={() => setActiveTab('overview')}
+                  className="px-4 py-2 rounded-xl bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] text-xs font-bold cursor-pointer"
+                >
+                  Return to Member Dashboard
+                </button>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="px-4 py-2 rounded-xl bg-[#060911] border border-slate-700 hover:border-[#D4AF37]/50 text-slate-200 text-xs font-semibold cursor-pointer"
+                >
+                  View Profile & Status
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'announcements' && hasExclusiveAccess && (
             <AnnouncementsView
               announcements={announcements}
               currentUser={currentUser}
@@ -365,7 +453,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'directory' && (
+          {activeTab === 'directory' && hasExclusiveAccess && (
             <MemberDirectoryView
               members={directoryMembers}
               loading={directoryLoading}
@@ -375,6 +463,7 @@ export default function App() {
           {activeTab === 'profile' && (
             <MemberProfileView
               user={currentUser}
+              application={myApplication}
               onUserUpdated={(updated) => {
                 setCurrentUser(updated);
                 loadDashboardData();
@@ -383,7 +472,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'vault' && (
+          {activeTab === 'vault' && hasExclusiveAccess && (
             <div className="space-y-6">
               {/* Vault Sub-navigation + Search */}
               <div className="bg-[#0A1120] border border-slate-800 rounded-2xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -498,14 +587,23 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'admin' && (
-            <AdminDashboardView
-              currentUser={currentUser}
-              announcements={announcements}
-              onRefreshGlobal={loadDashboardData}
-              onNotify={showToast}
-            />
-          )}
+          {activeTab === 'admin' &&
+            (currentUser.role === 'admin' ? (
+              <AdminDashboardView
+                currentUser={currentUser}
+                announcements={announcements}
+                onRefreshGlobal={loadDashboardData}
+                onNotify={showToast}
+              />
+            ) : (
+              <div className="bg-[#0A1120] border border-rose-500/30 rounded-2xl p-10 text-center max-w-xl mx-auto">
+                <Shield className="w-8 h-8 text-rose-400 mx-auto mb-3" />
+                <h2 className="text-sm font-bold text-white">Administrator Access Required</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Ordinary members do not have permission to access administrative controls.
+                </p>
+              </div>
+            ))}
         </main>
       </div>
 

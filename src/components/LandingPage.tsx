@@ -288,15 +288,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateAuth }) => {
                 Membership Tiers
               </p>
               <h2 className="font-display text-3xl sm:text-4xl font-semibold text-white mt-2 text-balance">
-                Three pathways into the society.
+                Open registration or vetted fellowship.
               </h2>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                Join immediately with Open Membership and receive your unique Member ID, or submit an Approval-Based application for committee review.
+              </p>
             </div>
 
             <button
               onClick={() => onNavigateAuth('signup')}
               className="inline-flex items-center gap-2 text-xs font-semibold text-[#E7C860] hover:text-white transition-colors self-start md:self-auto cursor-pointer"
             >
-              <span>Begin Registration Application</span>
+              <span>Join or Apply Now</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

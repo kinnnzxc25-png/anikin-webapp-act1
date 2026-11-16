@@ -22,7 +22,8 @@
         "Design"
       ],
       "isPublicInDirectory": true,
-      "joinedAt": "2026-10-01T08:00:00.000Z"
+      "joinedAt": "2026-10-01T08:00:00.000Z",
+      "registrationType": "approval"
     },
     {
       "id": "user_client_1",
@@ -46,7 +47,8 @@
         "Design"
       ],
       "isPublicInDirectory": true,
-      "joinedAt": "2026-10-15T09:30:00.000Z"
+      "joinedAt": "2026-10-15T09:30:00.000Z",
+      "registrationType": "approval"
     },
     {
       "id": "user_admin_1",
@@ -72,7 +74,8 @@
       "createdAt": "2025-09-01T08:00:00.000Z",
       "joinedAt": "2025-09-01T08:00:00.000Z",
       "passwordHash": "2f4f1c6b8b1bfd3a13e69a6027b6b8c04d4886785c00973634f4b55bc0e48f0fd8a992aaa486a639e0c00d368c155c4ff5f9f76deebb607bf1c6c4b75afd2a8b",
-      "salt": "14b3e86b2c730846dbf0f38cae8c82ef"
+      "salt": "14b3e86b2c730846dbf0f38cae8c82ef",
+      "registrationType": "approval"
     },
     {
       "id": "user_member_1",
@@ -98,7 +101,8 @@
       "createdAt": "2026-01-12T10:00:00.000Z",
       "joinedAt": "2026-01-15T12:00:00.000Z",
       "passwordHash": "e6cb659f18cc28f9b3424430cfc45d784542b2123fff7fb1c637540cfe06796b8649f1ee1b6ced94d286b612424ea2f4186278e8516c2f636dd30819943281ec",
-      "salt": "eecc184ac588ba124fc64b10b13bc1d6"
+      "salt": "eecc184ac588ba124fc64b10b13bc1d6",
+      "registrationType": "approval"
     },
     {
       "id": "user_member_2",
@@ -123,7 +127,8 @@
       "createdAt": "2025-10-04T09:00:00.000Z",
       "joinedAt": "2025-10-06T09:00:00.000Z",
       "passwordHash": "ae1f0a92111b418c61d61f088d2e8886ef4819f104ffe1eb303732aef8087ba42be29e2149871a32d5fa64d899cbaa8eb68abea97a5cab927df5e25a7bacf898",
-      "salt": "2055481a6da256becb16cc05deb2ad19"
+      "salt": "2055481a6da256becb16cc05deb2ad19",
+      "registrationType": "approval"
     },
     {
       "id": "user_pending_1",
@@ -146,44 +151,35 @@
       "isPublicInDirectory": false,
       "createdAt": "2026-11-12T08:00:00.000Z",
       "passwordHash": "3fa4bec3ba6d02d34dcbf734d82131ba2b755d49c8ebcab54ef912b78ce748bc3ae38cb20bfb6a9ab6fbe41fe03c546220b31635ab87dad59137994a5f8c1112",
-      "salt": "d89ad8aad3b491e22228655522cac600"
+      "salt": "d89ad8aad3b491e22228655522cac600",
+      "joinedAt": "2026-11-12T08:00:00.000Z",
+      "registrationType": "approval"
     },
     {
-      "id": "user_1794743011316_93acabd0",
-      "email": "verify_1794743011291@example.com",
-      "passwordHash": "204d1a13e8e225795bce11d1c54dc80a0da7945a0a2f2bb7112fbd702b7dda01a92e12e2179bbdad109d90840b4e5df24429346a7f9f802f1d936000172f537c",
-      "salt": "2d0ba50d524ff5ce5d1ffed7fb8b075d",
-      "name": "Test Applicant",
+      "id": "user_rejected_1",
+      "email": "rejected@velvet.co",
+      "name": "Victor Soriano",
       "role": "member",
-      "company": "Studio Verify",
-      "title": "Founder",
-      "chapter": "Tokyo",
-      "membershipStatus": "pending",
-      "membershipTier": "Executive",
-      "memberNumber": "BATB-PEND",
-      "bio": "Testing registration flow",
+      "company": "Velvet Media Group",
+      "title": "Managing Director",
+      "chapter": "Singapore",
+      "membershipStatus": "rejected",
+      "membershipTier": "Founding Circle",
+      "registrationType": "approval",
+      "memberNumber": "BATB-REJ",
+      "bio": "Brand partnerships and experiential hospitality across APAC.",
+      "phone": "+65 9888 1204",
       "interests": [
-        "Networking",
-        "Private Salons"
+        "Hospitality",
+        "Media"
       ],
       "isPublicInDirectory": false,
-      "createdAt": "2026-11-15T11:43:31.316Z"
+      "createdAt": "2026-11-08T10:00:00.000Z",
+      "passwordHash": "1e988dda0a092c1a365f937bdef22a7afd23b0d253c09e5cdece2a150c6dd7b03b5b7da85eb1ec5e555999c3b3b4a05cb4b4062076ed436433d184d0034ef8e6",
+      "salt": "f63796c1999e4dbb9b025a4c3c4d28e8"
     }
   ],
   "applications": [
-    {
-      "id": "app_1794743011367_a3165d",
-      "userId": "user_1794743011316_93acabd0",
-      "applicantName": "Test Applicant",
-      "applicantEmail": "verify_1794743011291@example.com",
-      "company": "Studio Verify",
-      "title": "Founder",
-      "chapter": "Tokyo",
-      "tierRequested": "Executive",
-      "motivation": "Testing registration flow",
-      "status": "pending",
-      "submittedAt": "2026-11-15T11:43:31.316Z"
-    },
     {
       "id": "app_seed_1",
       "userId": "user_pending_1",
@@ -213,6 +209,21 @@
       "reviewNote": "Vouched by Arthur Sterling. Welcomed to Tokyo Chapter.",
       "submittedAt": "2026-01-12T10:00:00.000Z",
       "reviewedAt": "2026-01-15T12:00:00.000Z"
+    },
+    {
+      "id": "app_seed_3",
+      "userId": "user_rejected_1",
+      "applicantName": "Victor Soriano",
+      "applicantEmail": "rejected@velvet.co",
+      "company": "Velvet Media Group",
+      "title": "Managing Director",
+      "chapter": "Singapore",
+      "tierRequested": "Founding Circle",
+      "motivation": "Applying directly for Founding Circle access in Singapore.",
+      "status": "rejected",
+      "reviewNote": "Founding Circle currently requires two existing chapter sponsors. You may re-apply under Open Membership or Associate.",
+      "submittedAt": "2026-11-08T10:00:00.000Z",
+      "reviewedAt": "2026-11-10T15:30:00.000Z"
     }
   ],
   "announcements": [
@@ -379,9 +390,19 @@
       "createdAt": 1794743011288
     },
     {
-      "token": "1c4c745706306a023a614ba5c4b42a98ba081fd1e3740691c9ba26adfd5ccd2a",
-      "userId": "user_1794743011316_93acabd0",
-      "createdAt": 1794743011367
+      "token": "302e4df73fd52dc7f73b261338771bbcc8b32f7eb88e5e8d4bfc4ca436f0fdcc",
+      "userId": "user_admin_1",
+      "createdAt": 1794813457079
+    },
+    {
+      "token": "713d879ac0d3352efee81ad4c35b1417f8b397a385cd55930b001de826c64cf2",
+      "userId": "user_admin_1",
+      "createdAt": 1794814392555
+    },
+    {
+      "token": "03857f2f1fe554e8b3fe443cf5b4fac884bc3ff9fe66398655da9e667c15609e",
+      "userId": "user_rejected_1",
+      "createdAt": 1794814392639
     }
   ]
 }

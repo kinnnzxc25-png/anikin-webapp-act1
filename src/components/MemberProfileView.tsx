@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User } from '../types';
+import { User, MembershipApplication } from '../types';
 import { api } from '../services/api';
 import { formatDate } from '../utils/formatters';
+import { MembershipStatusBadge } from './MembershipStatusBadge';
 import {
-  ShieldCheck,
-  Clock,
-  AlertTriangle,
   Save,
   User as UserIcon,
   Building2,
@@ -13,10 +11,12 @@ import {
   MapPin,
   Phone,
   Eye,
+  FileCheck2,
 } from 'lucide-react';
 
 interface MemberProfileViewProps {
   user: User;
+  application?: MembershipApplication | null;
   onUserUpdated: (user: User) => void;
   onNotify: (message: string, type?: 'success' | 'error') => void;
 }
@@ -25,6 +25,7 @@ const CHAPTERS = ['Manila', 'Tokyo', 'Singapore', 'London', 'New York'];
 
 export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
   user,
+  application,
   onUserUpdated,
   onNotify,
 }) => {
@@ -80,12 +81,8 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
     }
   };
 
-  const statusBadge =
-    user.membershipStatus === 'active'
-      ? { label: 'Active Standing', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" />, cls: 'text-emerald-400' }
-      : user.membershipStatus === 'pending'
-      ? { label: 'Pending Review', icon: <Clock className="w-4 h-4 text-amber-400" />, cls: 'text-amber-400' }
-      : { label: user.membershipStatus, icon: <AlertTriangle className="w-4 h-4 text-rose-400" />, cls: 'text-rose-400' };
+  const registrationLabel =
+    user.registrationType === 'open' ? 'Open Membership' : 'Approval-Based';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -117,30 +114,32 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
           </div>
 
           <div className="mt-6 pt-5 border-t border-slate-800 space-y-3 text-xs">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400">Membership Status</span>
-              <span className={`inline-flex items-center gap-1.5 font-semibold capitalize ${statusBadge.cls}`}>
-                {statusBadge.icon}
-                {statusBadge.label}
-              </span>
+              <MembershipStatusBadge status={user.membershipStatus} size="sm" />
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-400">Registration Method</span>
+              <span className="font-semibold text-slate-200">{registrationLabel}</span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400">Membership Tier</span>
               <span className="font-semibold text-[#E7C860]">{user.membershipTier}</span>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400">Home Chapter</span>
               <span className="font-semibold text-white">{user.chapter || 'Manila'}</span>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400">Role</span>
               <span className="font-semibold text-slate-200 capitalize">{user.role}</span>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-400">Member Since</span>
               <span className="font-mono text-slate-200 tabular-nums">
                 {formatDate(user.joinedAt || user.createdAt)}
@@ -148,6 +147,58 @@ export const MemberProfileView: React.FC<MemberProfileViewProps> = ({
             </div>
           </div>
         </div>
+
+        {application && (
+          <div className="bg-[#0A1120] border border-slate-800 rounded-2xl p-6 space-y-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-bold text-white flex items-center gap-2">
+                <FileCheck2 className="w-4 h-4 text-[#D4AF37]" />
+                <span>Membership Application</span>
+              </span>
+              <span
+                className={`font-semibold capitalize ${
+                  application.status === 'approved'
+                    ? 'text-emerald-400'
+                    : application.status === 'pending'
+                    ? 'text-amber-300'
+                    : 'text-rose-400'
+                }`}
+              >
+                {application.status === 'declined' ? 'rejected' : application.status}
+              </span>
+            </div>
+
+            <div className="space-y-1.5 text-[11px] text-slate-400">
+              <div className="flex justify-between gap-2">
+                <span>Requested Tier</span>
+                <span className="text-slate-200 font-medium">{application.tierRequested}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span>Submitted</span>
+                <span className="font-mono text-slate-200 tabular-nums">
+                  {formatDate(application.submittedAt)}
+                </span>
+              </div>
+              {application.reviewedAt && (
+                <div className="flex justify-between gap-2">
+                  <span>Reviewed</span>
+                  <span className="font-mono text-slate-200 tabular-nums">
+                    {formatDate(application.reviewedAt)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {application.reviewNote && (
+              <div className="p-3 rounded-xl bg-[#060911] border border-slate-800 text-slate-300 leading-relaxed">
+                <div className="text-[11px] font-semibold text-[#E7C860] mb-1">
+                  Committee Note
+                </div>
+                {application.reviewNote}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Editable Profile Form */}
