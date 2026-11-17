@@ -33,6 +33,10 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { FilePreviewModal } from './components/FilePreviewModal';
 import { PublicClientPortal } from './components/PublicClientPortal';
 import { StatsView } from './components/StatsView';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWAUpdateBanner } from './components/PWAUpdateBanner';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import {
   Loader2,
   CheckCircle,
@@ -43,12 +47,18 @@ import {
   List,
   Lock,
   Shield,
+  WifiOff,
 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [myApplication, setMyApplication] = useState<MembershipApplication | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [accessConfig, setAccessConfig] = useState<{
+    privateBeta: boolean;
+    registrationOpen: boolean;
+    authConfigured: boolean;
+  }>({ privateBeta: true, registrationOpen: false, authConfigured: true });
   const [publicView, setPublicView] = useState<'landing' | 'auth'>('landing');
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
@@ -91,6 +101,9 @@ export default function App() {
 
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const isOnline = useOnlineStatus();
+  const [revalidatingSession, setRevalidatingSession] = useState<boolean>(false);
+  const wasOfflineRef = React.useRef<boolean>(false);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -111,9 +124,17 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Check existing session
+  // Check access config and existing session (fail-closed)
   useEffect(() => {
     const initAuth = async () => {
+      try {
+        const cfg = await api.getAccessConfig();
+        setAccessConfig(cfg);
+      } catch {
+        // Fail closed into private beta if config endpoint cannot be reached
+        setAccessConfig({ privateBeta: true, registrationOpen: false, authConfigured: true });
+      }
+
       const token = api.getToken();
       if (!token) {
         setAuthLoading(false);
@@ -131,6 +152,38 @@ export default function App() {
     };
     initAuth();
   }, []);
+
+  // Fail closed when offline and re-verify active session when connectivity returns
+  useEffect(() => {
+    if (!isOnline) {
+      wasOfflineRef.current = true;
+      return;
+    }
+    if (!wasOfflineRef.current) {
+      return;
+    }
+    wasOfflineRef.current = false;
+
+    const revalidate = async () => {
+      setRevalidatingSession(true);
+      try {
+        const cfg = await api.getAccessConfig();
+        setAccessConfig(cfg);
+        if (api.getToken()) {
+          const { user, application } = await api.getCurrentUser();
+          setCurrentUser(user);
+          setMyApplication(application || null);
+        }
+      } catch {
+        api.clearToken();
+        setCurrentUser(null);
+        setMyApplication(null);
+      } finally {
+        setRevalidatingSession(false);
+      }
+    };
+    revalidate();
+  }, [isOnline]);
 
   // Load Membership + Preserved Vault Data
   const loadDashboardData = useCallback(async () => {
@@ -255,31 +308,70 @@ export default function App() {
     setPublicPortalCode(null);
   };
 
-  // Render Public Portal if hash is set
-  if (publicPortalCode) {
-    return (
-      <PublicClientPortal
-        portalCode={publicPortalCode}
-        onBackToDashboard={currentUser ? handleBackFromPublicPortal : undefined}
-      />
-    );
-  }
-
-  // Loading initial state
-  if (authLoading) {
+  // Loading or re-verifying initial state (fail-closed until access config & auth resolve)
+  if (authLoading || revalidatingSession) {
     return (
       <div className="min-h-screen bg-[#060911] flex items-center justify-center">
         <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-300">
           <Loader2 className="w-4 h-4 animate-spin text-[#D4AF37]" />
-          <span>Entering BOY'S AT THE BACK...</span>
+          <span>{revalidatingSession ? 'Verifying secure session...' : "Entering BOY'S AT THE BACK..."}</span>
         </div>
+        <OfflineIndicator />
+        <PWAUpdateBanner isAuthenticated={Boolean(currentUser)} />
       </div>
     );
   }
 
-  // Public Landing & Auth Flow
+  // Fail closed when offline so protected dashboards, admin pages, member content, and files are never exposed
+  if (!isOnline && (currentUser || publicPortalCode)) {
+    return (
+      <div className="min-h-screen bg-[#060911] text-slate-100 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-[#0A1120] border border-amber-500/30 rounded-2xl p-8 text-center shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+            <WifiOff className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-[#E7C860] tracking-wide">
+              Connection Required
+            </h2>
+            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+              Protected dashboards, member records, and private files are locked while offline. Reconnect to verify your active session.
+            </p>
+          </div>
+          {currentUser && (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full py-2.5 px-4 rounded-xl border border-slate-700 hover:border-slate-600 text-xs font-semibold text-slate-200 transition-colors cursor-pointer"
+            >
+              Sign Out
+            </button>
+          )}
+        </div>
+        <OfflineIndicator />
+        <PWAUpdateBanner isAuthenticated={Boolean(currentUser)} />
+      </div>
+    );
+  }
+
+  // Render Public Portal if hash is set (only allowed unauthenticated when Private Beta is OFF)
+  if (publicPortalCode && (!accessConfig.privateBeta || currentUser)) {
+    return (
+      <>
+        <PublicClientPortal
+          portalCode={publicPortalCode}
+          onBackToDashboard={currentUser ? handleBackFromPublicPortal : undefined}
+        />
+        <OfflineIndicator />
+        <PWAInstallPrompt />
+        <PWAUpdateBanner isAuthenticated={Boolean(currentUser)} />
+      </>
+    );
+  }
+
+  // Public Landing & Auth Flow (in Private Beta, bypass LandingPage & force Owner Sign-In)
   if (!currentUser) {
-    if (publicView === 'landing') {
+    if (!accessConfig.privateBeta && publicView === 'landing') {
       return (
         <>
           <LandingPage
@@ -298,24 +390,44 @@ export default function App() {
               <span>{toast.message}</span>
             </div>
           )}
+          <OfflineIndicator />
+          <PWAInstallPrompt />
+          <PWAUpdateBanner isAuthenticated={false} />
         </>
       );
     }
 
     return (
-      <AuthView
-        initialMode={authMode}
-        onBackToLanding={() => setPublicView('landing')}
-        onSuccess={(user) => {
-          setCurrentUser(user);
-          setActiveTab('overview');
-          showToast(
-            user.membershipStatus === 'pending'
-              ? `Application received, ${user.name}. Your status is Pending review.`
-              : `Welcome, ${user.name}.`
-          );
-        }}
-      />
+      <>
+        <AuthView
+          initialMode={accessConfig.privateBeta ? 'signin' : authMode}
+          privateBeta={accessConfig.privateBeta}
+          authConfigured={accessConfig.authConfigured}
+          onBackToLanding={() => setPublicView('landing')}
+          onSuccess={(user) => {
+            setCurrentUser(user);
+            setActiveTab('overview');
+            showToast(
+              user.membershipStatus === 'pending'
+                ? `Application received, ${user.name}. Your status is Pending review.`
+                : `Welcome, ${user.name}.`
+            );
+          }}
+        />
+        {toast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 py-2.5 px-4 rounded-xl shadow-xl bg-[#0A1120] text-white text-xs font-medium border border-[#D4AF37]/30">
+            {toast.type === 'success' ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{toast.message}</span>
+          </div>
+        )}
+        <OfflineIndicator />
+        <PWAInstallPrompt />
+        <PWAUpdateBanner isAuthenticated={false} />
+      </>
     );
   }
 
@@ -644,6 +756,9 @@ export default function App() {
           <span>{toast.message}</span>
         </div>
       )}
+      <OfflineIndicator />
+      <PWAInstallPrompt />
+      <PWAUpdateBanner isAuthenticated={Boolean(currentUser)} />
     </div>
   );
 }

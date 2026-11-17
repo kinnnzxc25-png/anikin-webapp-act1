@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -73,6 +74,14 @@ const upload = multer({
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Never cache private API responses, tokens, member records, or file streams
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // Types
 export type MembershipStatus = 'active' | 'pending' | 'rejected' | 'suspended' | 'alumni';
@@ -182,8 +191,18 @@ function hashPassword(password: string, salt: string): string {
 }
 
 function verifyPassword(password: string, hash: string, salt: string): boolean {
-  const check = hashPassword(password, salt);
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(check, 'hex'));
+  if (!password || !hash || !salt) return false;
+  try {
+    const check = hashPassword(password, salt);
+    const hashBuf = Buffer.from(hash, 'hex');
+    const checkBuf = Buffer.from(check, 'hex');
+    if (hashBuf.length === 0 || hashBuf.length !== checkBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(hashBuf, checkBuf);
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeUser(user: User) {
@@ -643,6 +662,120 @@ function saveDatabase() {
   }
 }
 
+// -------------------------------------------------------------
+// Private Beta Security Helpers & Sole Owner Provisioning
+// -------------------------------------------------------------
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_LOGIN_ATTEMPTS = 10;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function isPrivateBetaMode(): boolean {
+  return (process.env.PRIVATE_BETA_MODE || 'true').trim().toLowerCase() !== 'false';
+}
+
+function getBetaAdminEmail(): string {
+  return (process.env.BETA_ADMIN_EMAIL || 'kinnnzxc25@gmail.com').trim().toLowerCase();
+}
+
+function getBetaAdminPassword(): string {
+  return (process.env.BETA_ADMIN_PASSWORD || '').trim();
+}
+
+function isBetaOwnerUser(user: User | undefined): boolean {
+  if (!user) return false;
+  return (
+    user.email.trim().toLowerCase() === getBetaAdminEmail() &&
+    user.role === 'admin' &&
+    user.membershipStatus === 'active'
+  );
+}
+
+function ensureBetaOwnerAndLockdown() {
+  if (!isPrivateBetaMode()) return;
+
+  const ownerEmail = getBetaAdminEmail();
+  const ownerPassword = getBetaAdminPassword();
+  const now = new Date().toISOString();
+
+  let owner = db.users.find((u) => u.email.trim().toLowerCase() === ownerEmail);
+  let dbModified = false;
+
+  if (!owner) {
+    const salt = ownerPassword ? crypto.randomBytes(16).toString('hex') : '';
+    const passwordHash = ownerPassword ? hashPassword(ownerPassword, salt) : '';
+    owner = {
+      id: 'user_beta_owner',
+      email: ownerEmail,
+      passwordHash,
+      salt,
+      name: 'Club Owner & Administrator',
+      role: 'admin',
+      company: "BOY'S AT THE BACK",
+      title: 'Sole Administrator',
+      chapter: 'Manila',
+      membershipStatus: 'active',
+      membershipTier: 'Founding Circle',
+      registrationType: 'approval',
+      memberNumber: 'BATB-000',
+      bio: "Sole authorized administrator for BOY'S AT THE BACK Private Beta.",
+      interests: ['Governance', 'Private Salons', 'Architecture'],
+      isPublicInDirectory: true,
+      createdAt: now,
+      joinedAt: now,
+    };
+    db.users.unshift(owner);
+    dbModified = true;
+  } else {
+    if (owner.role !== 'admin') {
+      owner.role = 'admin';
+      dbModified = true;
+    }
+    if (owner.membershipStatus !== 'active') {
+      owner.membershipStatus = 'active';
+      dbModified = true;
+    }
+    if (owner.membershipTier !== 'Founding Circle') {
+      owner.membershipTier = 'Founding Circle';
+      dbModified = true;
+    }
+    if (ownerPassword && !verifyPassword(ownerPassword, owner.passwordHash, owner.salt)) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      owner.salt = salt;
+      owner.passwordHash = hashPassword(ownerPassword, salt);
+      dbModified = true;
+    }
+  }
+
+  // Verify the authorized owner exists and holds active admin privileges BEFORE purging other sessions
+  if (isBetaOwnerUser(owner)) {
+    const beforeCount = db.sessions.length;
+    const nowMs = Date.now();
+    db.sessions = db.sessions.filter(
+      (s) => s.userId === owner!.id && nowMs - s.createdAt <= SESSION_TTL_MS
+    );
+    if (db.sessions.length !== beforeCount) {
+      dbModified = true;
+    }
+  } else {
+    console.warn('[Security] Authorized owner account could not be verified with admin role.');
+  }
+
+  if (!ownerPassword) {
+    console.warn(
+      '[Private Beta] BETA_ADMIN_PASSWORD secret is not configured. Admin sign-in will fail safely until configured.'
+    );
+  } else {
+    console.log('[Private Beta] Sole administrator access verified and non-owner sessions purged.');
+  }
+
+  if (dbModified) {
+    saveDatabase();
+  }
+}
+
+ensureBetaOwnerAndLockdown();
+
 // Auth Middleware
 function authenticate(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
@@ -658,18 +791,42 @@ function authenticate(req: express.Request, res: express.Response, next: express
     return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
 
-  const session = db.sessions.find((s) => s.token === token);
-  if (!session) {
+  const sessionIndex = db.sessions.findIndex((s) => s.token === token);
+  if (sessionIndex === -1) {
     return res.status(401).json({ error: 'Session expired or invalid. Please sign in again.' });
+  }
+
+  const session = db.sessions[sessionIndex];
+  if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+    db.sessions.splice(sessionIndex, 1);
+    saveDatabase();
+    return res.status(401).json({ error: 'Session expired. Please sign in again.' });
   }
 
   const user = db.users.find((u) => u.id === session.userId);
   if (!user) {
+    db.sessions.splice(sessionIndex, 1);
+    saveDatabase();
     return res.status(401).json({ error: 'User account not found.' });
+  }
+
+  if (isPrivateBetaMode() && !isBetaOwnerUser(user)) {
+    db.sessions.splice(sessionIndex, 1);
+    saveDatabase();
+    return res.status(403).json({
+      error: 'Private Beta access is restricted to the sole authorized administrator.',
+    });
   }
 
   (req as any).user = user;
   next();
+}
+
+function requireBetaAccessIfEnabled(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!isPrivateBetaMode()) {
+    return next();
+  }
+  return authenticate(req, res, next);
 }
 
 function generateUniqueMemberNumber(): string {
@@ -694,6 +851,9 @@ function requireAdmin(req: express.Request, res: express.Response, next: express
   if (!user || user.role !== 'admin') {
     return res.status(403).json({ error: 'Administrator privileges required.' });
   }
+  if (isPrivateBetaMode() && !isBetaOwnerUser(user)) {
+    return res.status(403).json({ error: 'Private Beta administrator privileges required.' });
+  }
   next();
 }
 
@@ -701,6 +861,9 @@ function requireActiveMember(req: express.Request, res: express.Response, next: 
   const user = (req as any).user as User;
   if (!user) {
     return res.status(401).json({ error: 'Authentication required.' });
+  }
+  if (isPrivateBetaMode() && !isBetaOwnerUser(user)) {
+    return res.status(403).json({ error: 'Private Beta access is restricted to the authorized administrator.' });
   }
   if (user.role === 'admin' || user.membershipStatus === 'active') {
     return next();
@@ -715,10 +878,24 @@ function requireActiveMember(req: express.Request, res: express.Response, next: 
 }
 
 // -------------------------------------------------------------
-// Authentication & Membership Registration Endpoints
+// Access Mode & Authentication Endpoints
 // -------------------------------------------------------------
 
+app.get('/api/config/access', (_req, res) => {
+  const privateBeta = isPrivateBetaMode();
+  return res.json({
+    privateBeta,
+    registrationOpen: !privateBeta,
+    authConfigured: !privateBeta || Boolean(getBetaAdminPassword()),
+  });
+});
+
 app.post('/api/auth/register', (req, res) => {
+  if (isPrivateBetaMode()) {
+    return res.status(403).json({
+      error: 'Public registration is temporarily disabled during Private Beta Testing.',
+    });
+  }
   const {
     email,
     password,
@@ -827,17 +1004,65 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
+  const clientIp = (req.ip || req.socket.remoteAddress || 'unknown').toString();
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Please enter your email and password.' });
   }
 
+  const nowMs = Date.now();
+  const attempt = loginAttempts.get(clientIp);
+  if (attempt && nowMs < attempt.resetAt && attempt.count >= MAX_LOGIN_ATTEMPTS) {
+    return res.status(429).json({
+      error: 'Too many failed sign-in attempts. Please wait 15 minutes before trying again.',
+    });
+  }
+
+  const recordFailure = () => {
+    const cur = loginAttempts.get(clientIp);
+    if (!cur || nowMs >= cur.resetAt) {
+      loginAttempts.set(clientIp, { count: 1, resetAt: nowMs + LOGIN_WINDOW_MS });
+    } else {
+      cur.count += 1;
+    }
+  };
+
   const normalizedEmail = email.trim().toLowerCase();
+
+  if (isPrivateBetaMode()) {
+    const configuredSecret = getBetaAdminPassword();
+    if (!configuredSecret) {
+      return res.status(503).json({
+        error: 'Private Beta login is unavailable because BETA_ADMIN_PASSWORD is not configured in environment secrets.',
+      });
+    }
+
+    // Re-sync owner record in case secret changed at runtime
+    ensureBetaOwnerAndLockdown();
+
+    if (normalizedEmail !== getBetaAdminEmail()) {
+      recordFailure();
+      return res.status(403).json({
+        error: 'Access denied. Private Beta Testing is restricted to the authorized administrator.',
+      });
+    }
+  }
+
   const user = db.users.find((u) => u.email.toLowerCase() === normalizedEmail);
 
   if (!user || !verifyPassword(password, user.passwordHash, user.salt)) {
+    recordFailure();
     return res.status(401).json({ error: 'Invalid email or password. Please try again.' });
   }
+
+  if (isPrivateBetaMode() && !isBetaOwnerUser(user)) {
+    recordFailure();
+    return res.status(403).json({
+      error: 'Access denied. Administrator role is required during Private Beta Testing.',
+    });
+  }
+
+  loginAttempts.delete(clientIp);
 
   const token = crypto.randomBytes(32).toString('hex');
   db.sessions.push({
@@ -1112,6 +1337,7 @@ app.get('/api/admin/members', authenticate, requireAdmin, (req, res) => {
 });
 
 app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
+  const adminUser = (req as any).user as User;
   const { id } = req.params;
   const member = db.users.find((u) => u.id === id);
   if (!member) {
@@ -1119,6 +1345,23 @@ app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
   }
 
   const { membershipStatus, membershipTier, role, chapter, memberNumber } = req.body;
+  const isProtectedOwner =
+    member.id === adminUser.id ||
+    (isPrivateBetaMode() && member.email.trim().toLowerCase() === getBetaAdminEmail());
+
+  if (isProtectedOwner) {
+    if (membershipStatus && membershipStatus !== 'active') {
+      return res.status(400).json({
+        error: 'You cannot deactivate or lock out your own administrator account.',
+      });
+    }
+    if (role && role !== 'admin') {
+      return res.status(400).json({
+        error: 'You cannot remove administrator privileges from your own account.',
+      });
+    }
+  }
+
   const now = new Date().toISOString();
 
   if (['active', 'pending', 'rejected', 'suspended', 'alumni'].includes(membershipStatus)) {
@@ -1356,17 +1599,22 @@ app.get('/api/files/:id/download', (req, res) => {
     return res.status(404).json({ error: 'Requested file was not found.' });
   }
 
+  const requireAuth = isPrivateBetaMode() || !file.portalId;
+
   if (token) {
     const session = db.sessions.find((s) => s.token === token);
     const reqUser = session ? db.users.find((u) => u.id === session.userId) : undefined;
-    if (!session || !reqUser) {
+    if (!session || !reqUser || Date.now() - session.createdAt > SESSION_TTL_MS) {
       return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    if (isPrivateBetaMode() && !isBetaOwnerUser(reqUser)) {
+      return res.status(403).json({ error: 'Private Beta access is restricted to the authorized administrator.' });
     }
     if (!file.portalId && reqUser.role !== 'admin' && reqUser.membershipStatus !== 'active') {
       return res.status(403).json({ error: 'Active membership standing is required to download vault files.' });
     }
-  } else if (!file.portalId) {
-    return res.status(401).json({ error: 'Authentication required to download private vault files.' });
+  } else if (requireAuth) {
+    return res.status(401).json({ error: 'Authentication required to download vault files.' });
   }
 
   const filePath = path.join(UPLOADS_DIR, file.storedName);
@@ -1392,17 +1640,22 @@ app.get('/api/files/:id/preview', (req, res) => {
     return res.status(404).json({ error: 'File not found.' });
   }
 
+  const requireAuth = isPrivateBetaMode() || !file.portalId;
+
   if (token) {
     const session = db.sessions.find((s) => s.token === token);
     const reqUser = session ? db.users.find((u) => u.id === session.userId) : undefined;
-    if (!session || !reqUser) {
+    if (!session || !reqUser || Date.now() - session.createdAt > SESSION_TTL_MS) {
       return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    if (isPrivateBetaMode() && !isBetaOwnerUser(reqUser)) {
+      return res.status(403).json({ error: 'Private Beta access is restricted to the authorized administrator.' });
     }
     if (!file.portalId && reqUser.role !== 'admin' && reqUser.membershipStatus !== 'active') {
       return res.status(403).json({ error: 'Active membership standing is required to preview vault files.' });
     }
-  } else if (!file.portalId) {
-    return res.status(401).json({ error: 'Authentication required to preview private vault files.' });
+  } else if (requireAuth) {
+    return res.status(401).json({ error: 'Authentication required to preview vault files.' });
   }
 
   const filePath = path.join(UPLOADS_DIR, file.storedName);
@@ -1531,7 +1784,7 @@ app.post('/api/portals', authenticate, requireActiveMember, (req, res) => {
   });
 });
 
-app.get('/api/portals/public/:code', (req, res) => {
+app.get('/api/portals/public/:code', requireBetaAccessIfEnabled, (req, res) => {
   const { code } = req.params;
   const portal = db.portals.find((p) => p.code.toUpperCase() === code.toUpperCase());
 
@@ -1571,7 +1824,7 @@ app.get('/api/portals/public/:code', (req, res) => {
   });
 });
 
-app.post('/api/portals/public/:code/upload', upload.array('files', 15), (req, res) => {
+app.post('/api/portals/public/:code/upload', requireBetaAccessIfEnabled, upload.array('files', 15), (req, res) => {
   const { code } = req.params;
   const { clientName, notes } = req.body;
   const files = req.files as Express.Multer.File[];
@@ -1671,8 +1924,20 @@ async function startServer() {
       }
     });
   } else {
-    app.use(express.static('dist'));
-    app.get('*', (_req, res) => {
+    app.use(
+      express.static('dist', {
+        setHeaders: (res, filePath) => {
+          const base = path.basename(filePath);
+          if (base === 'sw.js' || base === 'manifest.webmanifest' || base.startsWith('workbox-')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          }
+        },
+      })
+    );
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API endpoint not found.' });
+      }
       res.sendFile(path.resolve('dist/index.html'));
     });
   }

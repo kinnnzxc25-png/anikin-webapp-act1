@@ -23,12 +23,10 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isAdmin() {
+    function isSoleBetaOwner() {
       return isSignedIn() && (
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (request.auth.token.email_verified == true && request.auth.token.email == 'kinnnzxc25@gmail.com') ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        (request.auth.token.email_verified == true && request.auth.token.email == 'kinnnzxc25@gmail.com')
       );
     }
 
@@ -89,82 +87,60 @@ service cloud.firestore {
         data.category in ['image', 'document', 'design', 'archive', 'other'];
     }
 
-    function isActiveMember() {
-      return isSignedIn() && (
-        isAdmin() ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.membershipStatus == 'active')
-      );
+    // Admins Allowlist Collection (Private Beta: strictly read-only to self; no client writes)
+    match /admins/{adminId} {
+      allow get: if isSoleBetaOwner() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
     }
 
-    // Users Collection (PII protected: own profile, directory-opted active members, or admin)
+    // Users Collection (Private Beta: sole owner access only)
     match /users/{userId} {
-      allow get: if isSignedIn() && (
-        request.auth.uid == userId ||
-        resource.data.id == request.auth.uid ||
-        isAdmin() ||
-        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
-      );
-      allow list: if isSignedIn() && (
-        resource.data.id == request.auth.uid ||
-        isAdmin() ||
-        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
-      );
-      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) &&
-        (incoming().id == request.auth.uid || userId == request.auth.uid) &&
-        incoming().role == 'member' &&
-        (
-          (!('registrationType' in incoming()) && incoming().membershipStatus == 'pending') ||
-          (incoming().registrationType == 'open' && incoming().membershipStatus == 'active') ||
-          (incoming().registrationType == 'approval' && incoming().membershipStatus == 'pending')
-        );
-      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
-        isAdmin() ||
-        (existing().id == request.auth.uid && incoming().id == existing().id && incoming().role == existing().role && incoming().membershipStatus == existing().membershipStatus && incoming().membershipTier == existing().membershipTier)
-      );
-      allow delete: if isAdmin();
+      allow get: if isSoleBetaOwner() && isValidId(userId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(userId) && isValidUser(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(userId) && isValidUser(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(userId);
     }
 
-    // Membership Applications Collection
+    // Membership Applications Collection (Private Beta: sole owner access only)
     match /applications/{applicationId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && incoming().userId == request.auth.uid && incoming().status == 'pending';
-      allow update: if isAdmin() && isValidId(applicationId) && isValidApplication(incoming());
-      allow delete: if isAdmin() && isValidId(applicationId);
+      allow get: if isSoleBetaOwner() && isValidId(applicationId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(applicationId) && isValidApplication(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(applicationId) && isValidApplication(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(applicationId);
     }
 
-    // Announcements Collection (exclusive to approved/active members and admins)
+    // Announcements Collection (Private Beta: sole owner access only)
     match /announcements/{announcementId} {
-      allow get: if isActiveMember();
-      allow list: if isActiveMember();
-      allow create: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
-      allow update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
-      allow delete: if isAdmin() && isValidId(announcementId);
+      allow get: if isSoleBetaOwner() && isValidId(announcementId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(announcementId) && isValidAnnouncement(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(announcementId);
     }
 
-    // Portals Collection
+    // Portals Collection (Private Beta: public portal reads disabled; sole owner access only)
     match /portals/{portalId} {
-      allow get: if true;
-      allow list: if isSignedIn() && (resource.data.freelancerId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(portalId) && isValidPortal(incoming()) && incoming().freelancerId == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(portalId) && isValidPortal(incoming()) && (existing().freelancerId == request.auth.uid || isAdmin());
-      allow delete: if isSignedIn() && isValidId(portalId) && (existing().freelancerId == request.auth.uid || isAdmin());
+      allow get: if isSoleBetaOwner() && isValidId(portalId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(portalId) && isValidPortal(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(portalId) && isValidPortal(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(portalId);
     }
 
-    // Files Collection
+    // Files Collection (Private Beta: client uploads disabled; sole owner access only)
     match /files/{fileId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if (isSignedIn() && isValidId(fileId) && isValidFile(incoming()) && incoming().userId == request.auth.uid) ||
-                       (isValidId(fileId) && isValidFile(incoming()) && incoming().uploadedBy == 'client');
-      allow update: if isSignedIn() && isValidId(fileId) && isValidFile(incoming()) && (existing().userId == request.auth.uid || isAdmin()) && incoming().userId == existing().userId;
-      allow delete: if isSignedIn() && isValidId(fileId) && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSoleBetaOwner() && isValidId(fileId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(fileId) && isValidFile(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(fileId) && isValidFile(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId;
+      allow delete: if isSoleBetaOwner() && isValidId(fileId);
     }
 
-    // Connection testing
+    // Connection testing (Private Beta: locked to sole owner only)
     match /test/connection {
-      allow read: if true;
+      allow read: if isSoleBetaOwner();
     }
   }
 }

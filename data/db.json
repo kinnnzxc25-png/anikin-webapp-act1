@@ -1,6 +1,30 @@
 {
   "users": [
     {
+      "id": "user_beta_owner",
+      "email": "kinnnzxc25@gmail.com",
+      "passwordHash": "0c3ca2081f468b2d5575e7c07155a43800d66045a5d30a0acb4289b9e2c77de391dec74b7b4e18936ca1a959df881fd3c8bde2c28a8f437b7b0fc7e4fd65c955",
+      "salt": "bfe81547e591437002a2ca2ec52d277b",
+      "name": "Club Owner & Administrator",
+      "role": "admin",
+      "company": "BOY'S AT THE BACK",
+      "title": "Sole Administrator",
+      "chapter": "Manila",
+      "membershipStatus": "active",
+      "membershipTier": "Founding Circle",
+      "registrationType": "approval",
+      "memberNumber": "BATB-000",
+      "bio": "Sole authorized administrator for BOY'S AT THE BACK Private Beta.",
+      "interests": [
+        "Governance",
+        "Private Salons",
+        "Architecture"
+      ],
+      "isPublicInDirectory": true,
+      "createdAt": "2026-11-17T08:38:59.090Z",
+      "joinedAt": "2026-11-17T08:38:59.090Z"
+    },
+    {
       "id": "user_freelancer_1",
       "email": "designer@tambyus.com",
       "passwordHash": "8ebc106863bfa425eff25b7d460c83fa11f6792405b87b87d9ce1564971c32e67f1642a8bee826763bbec29bd8f395d7e19d212a4d125d744930a8db1b50dd54",
@@ -376,39 +400,9 @@
   ],
   "sessions": [
     {
-      "token": "c236853e3939c8e96ab32b3269eb6f12af360e05fb992d92d3498ab59d39acd9",
-      "userId": "user_freelancer_1",
-      "createdAt": 1794476143427
-    },
-    {
-      "token": "fe461cd7dbb87feb919dea8be321d33d30f5f2fadcd1124f59f4f0d60fa66b0e",
-      "userId": "user_admin_1",
-      "createdAt": 1794743011225
-    },
-    {
-      "token": "2870db069c7084a5a9f46cb7003e1b3a06fb7a4d5e56ca1c36161b55df0213e4",
-      "userId": "user_member_1",
-      "createdAt": 1794743011288
-    },
-    {
-      "token": "302e4df73fd52dc7f73b261338771bbcc8b32f7eb88e5e8d4bfc4ca436f0fdcc",
-      "userId": "user_admin_1",
-      "createdAt": 1794813457079
-    },
-    {
-      "token": "713d879ac0d3352efee81ad4c35b1417f8b397a385cd55930b001de826c64cf2",
-      "userId": "user_admin_1",
-      "createdAt": 1794814392555
-    },
-    {
-      "token": "03857f2f1fe554e8b3fe443cf5b4fac884bc3ff9fe66398655da9e667c15609e",
-      "userId": "user_rejected_1",
-      "createdAt": 1794814392639
-    },
-    {
-      "token": "2e353eb31d7425411203830aca6782540c1da11ccca2188c21dd0b8d7112af7e",
-      "userId": "user_admin_1",
-      "createdAt": 1794902361302
+      "token": "d89d6b98625d3ada425633fe8d303468878d3d903cfa95ca5d874d9accb3624d",
+      "userId": "user_beta_owner",
+      "createdAt": 1794904804919
     }
   ]
 }

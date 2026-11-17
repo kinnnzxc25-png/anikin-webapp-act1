@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowRight, Menu, X, Shield, Users, Compass, Calendar } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface LandingPageProps {
   onNavigateAuth: (mode: 'signin' | 'signup') => void;
@@ -99,6 +100,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigateAuth }) => {
 
           {/* Zone 3: Primary Action + Mobile Menu Trigger */}
           <div className="flex items-center gap-3 shrink-0">
+            <PWAInstallButton variant="subtle" />
             <button
               onClick={() => onNavigateAuth('signin')}
               className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] text-xs font-semibold tracking-wide transition-colors whitespace-nowrap shrink-0 cursor-pointer"

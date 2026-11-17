@@ -1,5 +1,6 @@
 import React from 'react';
 import { Menu, LogOut } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TopBarProps {
   title: string;
@@ -40,6 +41,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
+        <PWAInstallButton variant="subtle" />
         {rightAction}
         <button
           onClick={onSignOut}

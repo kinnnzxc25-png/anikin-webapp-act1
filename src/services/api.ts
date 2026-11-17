@@ -59,8 +59,16 @@ export const api = {
   },
 
   // -------------------------------------------------------------
-  // Authentication & Registration
+  // Access Mode, Authentication & Registration
   // -------------------------------------------------------------
+  async getAccessConfig(): Promise<{
+    privateBeta: boolean;
+    registrationOpen: boolean;
+    authConfigured: boolean;
+  }> {
+    return this.request('/api/config/access');
+  },
+
   async register(body: {
     email: string;
     password: string;
@@ -289,7 +297,8 @@ export const api = {
   },
 
   getFilePreviewUrl(id: string): string {
-    return `/api/files/${id}/preview`;
+    const token = this.getToken();
+    return `/api/files/${id}/preview?token=${encodeURIComponent(token || '')}`;
   },
 
   async getPortals() {

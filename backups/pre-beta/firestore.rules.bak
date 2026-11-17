@@ -1,0 +1,170 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'kinnnzxc25@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Entity Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'name', 'role', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.email is string && data.email.size() <= 255 &&
+        data.name is string && data.name.size() <= 128 &&
+        data.role in ['admin', 'member', 'freelancer', 'client'] &&
+        (!('membershipStatus' in data) || data.membershipStatus in ['active', 'pending', 'rejected', 'suspended', 'alumni']) &&
+        (!('registrationType' in data) || data.registrationType in ['open', 'approval']) &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'userId', 'applicantName', 'applicantEmail', 'tierRequested', 'status', 'submittedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.applicantName is string && data.applicantName.size() <= 128 &&
+        data.applicantEmail is string && data.applicantEmail.size() <= 255 &&
+        data.tierRequested in ['Founding Circle', 'Executive', 'Patron', 'Associate'] &&
+        data.status in ['pending', 'approved', 'rejected', 'declined'] &&
+        data.submittedAt is string && data.submittedAt.size() <= 64;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'content', 'category', 'priority', 'authorId', 'publishedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.title is string && data.title.size() <= 255 &&
+        data.content is string && data.content.size() <= 4096 &&
+        data.category in ['Event', 'Governance', 'Spotlight', 'Notice'] &&
+        data.priority in ['pinned', 'normal'] &&
+        data.authorId is string && data.authorId.size() <= 128 &&
+        data.publishedAt is string && data.publishedAt.size() <= 64;
+    }
+
+    function isValidPortal(data) {
+      return data.keys().hasAll(['id', 'freelancerId', 'code', 'clientName', 'projectName', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.freelancerId is string && data.freelancerId.size() <= 128 &&
+        data.code is string && data.code.size() <= 64 &&
+        data.clientName is string && data.clientName.size() <= 128 &&
+        data.projectName is string && data.projectName.size() <= 255 &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidFile(data) {
+      return data.keys().hasAll(['id', 'userId', 'originalName', 'storedName', 'mimeType', 'size', 'uploadDate', 'uploadedBy', 'category']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.originalName is string && data.originalName.size() <= 255 &&
+        data.storedName is string && data.storedName.size() <= 255 &&
+        data.mimeType is string && data.mimeType.size() <= 128 &&
+        data.size is number && data.size > 0 &&
+        data.uploadDate is string && data.uploadDate.size() <= 64 &&
+        data.uploadedBy in ['freelancer', 'client', 'member', 'admin'] &&
+        data.category in ['image', 'document', 'design', 'archive', 'other'];
+    }
+
+    function isActiveMember() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.membershipStatus == 'active')
+      );
+    }
+
+    // Users Collection (PII protected: own profile, directory-opted active members, or admin)
+    match /users/{userId} {
+      allow get: if isSignedIn() && (
+        request.auth.uid == userId ||
+        resource.data.id == request.auth.uid ||
+        isAdmin() ||
+        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
+      );
+      allow list: if isSignedIn() && (
+        resource.data.id == request.auth.uid ||
+        isAdmin() ||
+        (isActiveMember() && resource.data.membershipStatus == 'active' && resource.data.isPublicInDirectory == true)
+      );
+      allow create: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) &&
+        (incoming().id == request.auth.uid || userId == request.auth.uid) &&
+        incoming().role == 'member' &&
+        (
+          (!('registrationType' in incoming()) && incoming().membershipStatus == 'pending') ||
+          (incoming().registrationType == 'open' && incoming().membershipStatus == 'active') ||
+          (incoming().registrationType == 'approval' && incoming().membershipStatus == 'pending')
+        );
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
+        isAdmin() ||
+        (existing().id == request.auth.uid && incoming().id == existing().id && incoming().role == existing().role && incoming().membershipStatus == existing().membershipStatus && incoming().membershipTier == existing().membershipTier)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Membership Applications Collection
+    match /applications/{applicationId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(applicationId) && isValidApplication(incoming()) && incoming().userId == request.auth.uid && incoming().status == 'pending';
+      allow update: if isAdmin() && isValidId(applicationId) && isValidApplication(incoming());
+      allow delete: if isAdmin() && isValidId(applicationId);
+    }
+
+    // Announcements Collection (exclusive to approved/active members and admins)
+    match /announcements/{announcementId} {
+      allow get: if isActiveMember();
+      allow list: if isActiveMember();
+      allow create: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+
+    // Portals Collection
+    match /portals/{portalId} {
+      allow get: if true;
+      allow list: if isSignedIn() && (resource.data.freelancerId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidId(portalId) && isValidPortal(incoming()) && incoming().freelancerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(portalId) && isValidPortal(incoming()) && (existing().freelancerId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn() && isValidId(portalId) && (existing().freelancerId == request.auth.uid || isAdmin());
+    }
+
+    // Files Collection
+    match /files/{fileId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if (isSignedIn() && isValidId(fileId) && isValidFile(incoming()) && incoming().userId == request.auth.uid) ||
+                       (isValidId(fileId) && isValidFile(incoming()) && incoming().uploadedBy == 'client');
+      allow update: if isSignedIn() && isValidId(fileId) && isValidFile(incoming()) && (existing().userId == request.auth.uid || isAdmin()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(fileId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Connection testing
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

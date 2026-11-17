@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSoleBetaOwner() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'kinnnzxc25@gmail.com')
+      );
+    }
+
+    // Entity Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'name', 'role', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.email is string && data.email.size() <= 255 &&
+        data.name is string && data.name.size() <= 128 &&
+        data.role in ['admin', 'member', 'freelancer', 'client'] &&
+        (!('membershipStatus' in data) || data.membershipStatus in ['active', 'pending', 'rejected', 'suspended', 'alumni']) &&
+        (!('registrationType' in data) || data.registrationType in ['open', 'approval']) &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'userId', 'applicantName', 'applicantEmail', 'tierRequested', 'status', 'submittedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.applicantName is string && data.applicantName.size() <= 128 &&
+        data.applicantEmail is string && data.applicantEmail.size() <= 255 &&
+        data.tierRequested in ['Founding Circle', 'Executive', 'Patron', 'Associate'] &&
+        data.status in ['pending', 'approved', 'rejected', 'declined'] &&
+        data.submittedAt is string && data.submittedAt.size() <= 64;
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'content', 'category', 'priority', 'authorId', 'publishedAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.title is string && data.title.size() <= 255 &&
+        data.content is string && data.content.size() <= 4096 &&
+        data.category in ['Event', 'Governance', 'Spotlight', 'Notice'] &&
+        data.priority in ['pinned', 'normal'] &&
+        data.authorId is string && data.authorId.size() <= 128 &&
+        data.publishedAt is string && data.publishedAt.size() <= 64;
+    }
+
+    function isValidPortal(data) {
+      return data.keys().hasAll(['id', 'freelancerId', 'code', 'clientName', 'projectName', 'createdAt']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.freelancerId is string && data.freelancerId.size() <= 128 &&
+        data.code is string && data.code.size() <= 64 &&
+        data.clientName is string && data.clientName.size() <= 128 &&
+        data.projectName is string && data.projectName.size() <= 255 &&
+        data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidFile(data) {
+      return data.keys().hasAll(['id', 'userId', 'originalName', 'storedName', 'mimeType', 'size', 'uploadDate', 'uploadedBy', 'category']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.originalName is string && data.originalName.size() <= 255 &&
+        data.storedName is string && data.storedName.size() <= 255 &&
+        data.mimeType is string && data.mimeType.size() <= 128 &&
+        data.size is number && data.size > 0 &&
+        data.uploadDate is string && data.uploadDate.size() <= 64 &&
+        data.uploadedBy in ['freelancer', 'client', 'member', 'admin'] &&
+        data.category in ['image', 'document', 'design', 'archive', 'other'];
+    }
+
+    // Admins Allowlist Collection (Private Beta: strictly read-only to self; no client writes)
+    match /admins/{adminId} {
+      allow get: if isSoleBetaOwner() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    // Users Collection (Private Beta: sole owner access only)
+    match /users/{userId} {
+      allow get: if isSoleBetaOwner() && isValidId(userId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(userId) && isValidUser(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(userId) && isValidUser(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(userId);
+    }
+
+    // Membership Applications Collection (Private Beta: sole owner access only)
+    match /applications/{applicationId} {
+      allow get: if isSoleBetaOwner() && isValidId(applicationId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(applicationId) && isValidApplication(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(applicationId) && isValidApplication(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(applicationId);
+    }
+
+    // Announcements Collection (Private Beta: sole owner access only)
+    match /announcements/{announcementId} {
+      allow get: if isSoleBetaOwner() && isValidId(announcementId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(announcementId) && isValidAnnouncement(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(announcementId);
+    }
+
+    // Portals Collection (Private Beta: public portal reads disabled; sole owner access only)
+    match /portals/{portalId} {
+      allow get: if isSoleBetaOwner() && isValidId(portalId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(portalId) && isValidPortal(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(portalId) && isValidPortal(incoming()) && incoming().id == existing().id;
+      allow delete: if isSoleBetaOwner() && isValidId(portalId);
+    }
+
+    // Files Collection (Private Beta: client uploads disabled; sole owner access only)
+    match /files/{fileId} {
+      allow get: if isSoleBetaOwner() && isValidId(fileId);
+      allow list: if isSoleBetaOwner();
+      allow create: if isSoleBetaOwner() && isValidId(fileId) && isValidFile(incoming());
+      allow update: if isSoleBetaOwner() && isValidId(fileId) && isValidFile(incoming()) && incoming().id == existing().id && incoming().userId == existing().userId;
+      allow delete: if isSoleBetaOwner() && isValidId(fileId);
+    }
+
+    // Connection testing (Private Beta: locked to sole owner only)
+    match /test/connection {
+      allow read: if isSoleBetaOwner();
+    }
+  }
+}

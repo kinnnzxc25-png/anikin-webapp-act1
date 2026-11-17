@@ -15,10 +15,13 @@ import {
   Zap,
   FileCheck2,
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthViewProps {
   initialMode?: 'signin' | 'signup';
-  onBackToLanding: () => void;
+  privateBeta?: boolean;
+  authConfigured?: boolean;
+  onBackToLanding?: () => void;
   onSuccess: (user: User) => void;
 }
 
@@ -28,10 +31,12 @@ const APPROVAL_TIERS: MembershipTier[] = ['Executive', 'Founding Circle', 'Patro
 
 export const AuthView: React.FC<AuthViewProps> = ({
   initialMode = 'signin',
+  privateBeta = false,
+  authConfigured = true,
   onBackToLanding,
   onSuccess,
 }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup'>(privateBeta ? 'signin' : initialMode);
   const [registrationType, setRegistrationType] = useState<RegistrationType>('open');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -100,24 +105,35 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
   };
 
+  const effectiveMode = privateBeta ? 'signin' : mode;
   const availableTiers = registrationType === 'open' ? OPEN_TIERS : APPROVAL_TIERS;
 
   return (
     <div className="min-h-screen bg-[#060911] text-slate-100 flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-xl w-full mx-auto">
         <div className="mb-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onBackToLanding}
-            className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-[#E7C860] transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Home</span>
-          </button>
+          {!privateBeta && onBackToLanding ? (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-[#E7C860] transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to Home</span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#E7C860]">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Private Beta Environment</span>
+            </span>
+          )}
 
-          <span className="text-[11px] font-mono text-slate-500">
-            Members & Applicants Portal
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-mono text-slate-500">
+              {privateBeta ? 'Restricted Administrator Portal' : 'Members & Applicants Portal'}
+            </span>
+            <PWAInstallButton variant="subtle" />
+          </div>
         </div>
 
         <div className="text-center mb-8">
@@ -133,36 +149,55 @@ export const AuthView: React.FC<AuthViewProps> = ({
         </div>
 
         <div className="bg-[#0A1120] border border-[#D4AF37]/20 rounded-2xl p-6 sm:p-8 shadow-2xl">
-          <div className="flex p-1 bg-[#060911] rounded-xl border border-slate-800 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                mode === 'signin'
-                  ? 'bg-[#D4AF37] text-[#060911]'
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              Member Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup');
-                setError(null);
-              }}
-              className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                mode === 'signup'
-                  ? 'bg-[#D4AF37] text-[#060911]'
-                  : 'text-slate-400 hover:text-slate-100'
-              }`}
-            >
-              Membership Registration
-            </button>
-          </div>
+          {privateBeta ? (
+            <div className="mb-6 pb-5 border-b border-slate-800 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-white">Authorized Administrator Sign In</h2>
+                <span className="text-[11px] font-mono text-[#E7C860]">Private Beta</span>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Access is currently limited to the sole authorized administrator. Public registration and member sign-ins are temporarily closed.
+              </p>
+            </div>
+          ) : (
+            <div className="flex p-1 bg-[#060911] rounded-xl border border-slate-800 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signin');
+                  setError(null);
+                }}
+                className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  effectiveMode === 'signin'
+                    ? 'bg-[#D4AF37] text-[#060911]'
+                    : 'text-slate-400 hover:text-slate-100'
+                }`}
+              >
+                Member Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  setError(null);
+                }}
+                className={`flex-1 py-2.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                  effectiveMode === 'signup'
+                    ? 'bg-[#D4AF37] text-[#060911]'
+                    : 'text-slate-400 hover:text-slate-100'
+                }`}
+              >
+                Membership Registration
+              </button>
+            </div>
+          )}
+
+          {privateBeta && !authConfigured && (
+            <div className="mb-5 p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200 leading-relaxed">
+              <strong className="block text-amber-300 mb-0.5">Administrator Secret Required</strong>
+              Set <code className="font-mono text-white">BETA_ADMIN_PASSWORD</code> in Google AI Studio Secrets and restart the server before signing in.
+            </div>
+          )}
 
           {error && (
             <div className="mb-5 p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200 flex items-start gap-2">
@@ -172,7 +207,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
+            {effectiveMode === 'signup' && (
               <>
                 {/* Registration Method Selector */}
                 <div>
@@ -351,7 +386,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className={mode === 'signin' ? 'sm:col-span-2' : ''}>
+              <div className={effectiveMode === 'signin' ? 'sm:col-span-2' : ''}>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">
                   Email Address
                 </label>
@@ -368,12 +403,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </div>
               </div>
 
-              <div className={mode === 'signin' ? 'sm:col-span-2' : ''}>
+              <div className={effectiveMode === 'signin' ? 'sm:col-span-2' : ''}>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-medium text-slate-300">
                     Password
                   </label>
-                  {mode === 'signin' && (
+                  {effectiveMode === 'signin' && !privateBeta && (
                     <span className="text-[11px] text-slate-500">
                       Demo password: <code className="font-mono text-slate-300">password123</code>
                     </span>
@@ -386,14 +421,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
+                    placeholder={privateBeta ? 'Enter administrator password' : 'Minimum 6 characters'}
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[#060911] border border-slate-800 text-slate-100 focus:outline-none focus:border-[#D4AF37]"
                   />
                 </div>
               </div>
             </div>
 
-            {mode === 'signup' && (
+            {effectiveMode === 'signup' && (
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">
                   {registrationType === 'approval'
@@ -413,14 +448,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (privateBeta && !authConfigured)}
               className="w-full py-2.5 px-4 rounded-xl bg-[#D4AF37] hover:bg-[#E7C860] text-[#060911] text-xs font-bold tracking-wide transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
               <span>
                 {loading
                   ? 'Please wait...'
-                  : mode === 'signin'
-                  ? 'Sign In to Member Portal'
+                  : effectiveMode === 'signin'
+                  ? privateBeta
+                    ? 'Sign In to Private Beta'
+                    : 'Sign In to Member Portal'
                   : registrationType === 'open'
                   ? 'Complete Open Registration'
                   : 'Submit Approval Application'}
@@ -429,55 +466,61 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </button>
           </form>
 
-          {/* Instant Demo Access */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80">
-            <div className="flex items-center justify-between text-xs mb-3">
-              <span className="font-semibold text-slate-300">Instant Demo Access</span>
-              <span className="text-[11px] text-slate-500">1-Click Preview</span>
+          {/* Instant Demo Access (Disabled in Private Beta) */}
+          {!privateBeta && (
+            <div className="mt-6 pt-5 border-t border-slate-800/80">
+              <div className="flex items-center justify-between text-xs mb-3">
+                <span className="font-semibold text-slate-300">Instant Demo Access</span>
+                <span className="text-[11px] text-slate-500">1-Click Preview</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleDemoLogin('admin@boysattheback.club')}
+                  className="p-2.5 rounded-xl bg-[#060911] border border-[#D4AF37]/30 hover:border-[#D4AF37] text-left transition-colors cursor-pointer"
+                >
+                  <div className="text-xs font-semibold text-[#E7C860]">Club Admin</div>
+                  <div className="text-[11px] text-slate-400 truncate mt-0.5">Rafael Navarro</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDemoLogin('member@boysattheback.club')}
+                  className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-emerald-500/50 text-left transition-colors cursor-pointer"
+                >
+                  <div className="text-xs font-semibold text-emerald-400">Active Member</div>
+                  <div className="text-[11px] text-slate-400 truncate mt-0.5">Julian Reyes</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDemoLogin('applicant@horizon.co')}
+                  className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-amber-500/50 text-left transition-colors cursor-pointer"
+                >
+                  <div className="text-xs font-semibold text-amber-300">Pending Status</div>
+                  <div className="text-[11px] text-slate-400 truncate mt-0.5">Dante Alcaraz</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDemoLogin('rejected@velvet.co')}
+                  className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-rose-500/50 text-left transition-colors cursor-pointer"
+                >
+                  <div className="text-xs font-semibold text-rose-400">Rejected Status</div>
+                  <div className="text-[11px] text-slate-400 truncate mt-0.5">Victor Soriano</div>
+                </button>
+              </div>
             </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin@boysattheback.club')}
-                className="p-2.5 rounded-xl bg-[#060911] border border-[#D4AF37]/30 hover:border-[#D4AF37] text-left transition-colors cursor-pointer"
-              >
-                <div className="text-xs font-semibold text-[#E7C860]">Club Admin</div>
-                <div className="text-[11px] text-slate-400 truncate mt-0.5">Rafael Navarro</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('member@boysattheback.club')}
-                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-emerald-500/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="text-xs font-semibold text-emerald-400">Active Member</div>
-                <div className="text-[11px] text-slate-400 truncate mt-0.5">Julian Reyes</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('applicant@horizon.co')}
-                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-amber-500/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="text-xs font-semibold text-amber-300">Pending Status</div>
-                <div className="text-[11px] text-slate-400 truncate mt-0.5">Dante Alcaraz</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('rejected@velvet.co')}
-                className="p-2.5 rounded-xl bg-[#060911] border border-slate-800 hover:border-rose-500/50 text-left transition-colors cursor-pointer"
-              >
-                <div className="text-xs font-semibold text-rose-400">Rejected Status</div>
-                <div className="text-[11px] text-slate-400 truncate mt-0.5">Victor Soriano</div>
-              </button>
-            </div>
-          </div>
+          )}
 
           <div className="mt-5 pt-4 border-t border-slate-800/60 flex items-center justify-center gap-2 text-[11px] text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Protected Member Registry & Cloud Firestore Persistence</span>
+            <span>
+              {privateBeta
+                ? 'Private Beta Mode · Sole Administrator Enforcement Active'
+                : 'Protected Member Registry & Cloud Firestore Persistence'}
+            </span>
           </div>
         </div>
       </div>
