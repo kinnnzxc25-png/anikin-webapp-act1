@@ -1119,6 +1119,7 @@ app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
   }
 
   const { membershipStatus, membershipTier, role, chapter, memberNumber } = req.body;
+  const now = new Date().toISOString();
 
   if (['active', 'pending', 'rejected', 'suspended', 'alumni'].includes(membershipStatus)) {
     member.membershipStatus = membershipStatus;
@@ -1126,10 +1127,27 @@ app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
       if (!member.memberNumber || member.memberNumber === 'BATB-PEND' || member.memberNumber === 'BATB-REJ') {
         member.memberNumber = generateUniqueMemberNumber();
       }
-      member.joinedAt = member.joinedAt || new Date().toISOString();
+      member.joinedAt = member.joinedAt || now;
       member.isPublicInDirectory = true;
-    } else if (membershipStatus === 'rejected' || membershipStatus === 'suspended') {
+    } else if (membershipStatus === 'rejected') {
+      if (!member.memberNumber || member.memberNumber === 'BATB-PEND') {
+        member.memberNumber = 'BATB-REJ';
+      }
       member.isPublicInDirectory = false;
+    } else if (membershipStatus === 'pending') {
+      member.isPublicInDirectory = false;
+    } else if (membershipStatus === 'suspended') {
+      member.isPublicInDirectory = false;
+    }
+
+    // Keep linked application status synchronized when admin transitions status directly
+    if (membershipStatus === 'active' || membershipStatus === 'rejected') {
+      const linkedApp = db.applications.find((a) => a.userId === member.id && a.status === 'pending');
+      if (linkedApp) {
+        linkedApp.status = membershipStatus === 'active' ? 'approved' : 'rejected';
+        linkedApp.reviewedAt = now;
+        syncToFirestore('applications', linkedApp.id, linkedApp);
+      }
     }
   }
   if (['Founding Circle', 'Executive', 'Patron', 'Associate'].includes(membershipTier)) {
@@ -1150,6 +1168,33 @@ app.patch('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
   syncToFirestore('users', member.id, safeMember);
 
   return res.json({ member: safeMember, message: `Updated ${member.name}'s membership record.` });
+});
+
+app.delete('/api/admin/members/:id', authenticate, requireAdmin, (req, res) => {
+  const adminUser = (req as any).user as User;
+  const { id } = req.params;
+
+  if (id === adminUser.id) {
+    return res.status(400).json({ error: 'You cannot delete your own administrator account.' });
+  }
+
+  const idx = db.users.findIndex((u) => u.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Member not found.' });
+  }
+
+  const [removed] = db.users.splice(idx, 1);
+  const removedApps = db.applications.filter((a) => a.userId === id);
+  db.applications = db.applications.filter((a) => a.userId !== id);
+  db.sessions = db.sessions.filter((s) => s.userId !== id);
+
+  saveDatabase();
+  deleteFromFirestore('users', id);
+  for (const appRecord of removedApps) {
+    deleteFromFirestore('applications', appRecord.id);
+  }
+
+  return res.json({ message: `Removed ${removed.name} from the member registry.` });
 });
 
 app.get('/api/admin/applications', authenticate, requireAdmin, (_req, res) => {
@@ -1313,9 +1358,15 @@ app.get('/api/files/:id/download', (req, res) => {
 
   if (token) {
     const session = db.sessions.find((s) => s.token === token);
-    if (!session) {
+    const reqUser = session ? db.users.find((u) => u.id === session.userId) : undefined;
+    if (!session || !reqUser) {
       return res.status(401).json({ error: 'Unauthorized.' });
     }
+    if (!file.portalId && reqUser.role !== 'admin' && reqUser.membershipStatus !== 'active') {
+      return res.status(403).json({ error: 'Active membership standing is required to download vault files.' });
+    }
+  } else if (!file.portalId) {
+    return res.status(401).json({ error: 'Authentication required to download private vault files.' });
   }
 
   const filePath = path.join(UPLOADS_DIR, file.storedName);
@@ -1334,9 +1385,24 @@ app.get('/api/files/:id/download', (req, res) => {
 
 app.get('/api/files/:id/preview', (req, res) => {
   const { id } = req.params;
+  const token = (req.query.token as string) || (req.headers.authorization ? req.headers.authorization.replace('Bearer ', '') : '');
+
   const file = db.files.find((f) => f.id === id);
   if (!file) {
     return res.status(404).json({ error: 'File not found.' });
+  }
+
+  if (token) {
+    const session = db.sessions.find((s) => s.token === token);
+    const reqUser = session ? db.users.find((u) => u.id === session.userId) : undefined;
+    if (!session || !reqUser) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    if (!file.portalId && reqUser.role !== 'admin' && reqUser.membershipStatus !== 'active') {
+      return res.status(403).json({ error: 'Active membership standing is required to preview vault files.' });
+    }
+  } else if (!file.portalId) {
+    return res.status(401).json({ error: 'Authentication required to preview private vault files.' });
   }
 
   const filePath = path.join(UPLOADS_DIR, file.storedName);

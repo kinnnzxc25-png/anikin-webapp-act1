@@ -195,7 +195,11 @@ export const MemberOverview: React.FC<MemberOverviewProps> = ({
                 {hasExclusiveAccess ? directoryCount : 'Locked'}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {hasExclusiveAccess ? 'Active Members' : 'Approval Required'}
+                {hasExclusiveAccess
+                  ? 'Active Members'
+                  : user.membershipStatus === 'rejected'
+                  ? 'Status: Rejected'
+                  : 'Approval Required'}
               </div>
             </button>
 
@@ -215,7 +219,11 @@ export const MemberOverview: React.FC<MemberOverviewProps> = ({
                 {hasExclusiveAccess ? announcements.length : 'Locked'}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {hasExclusiveAccess ? 'House Notices' : 'Approval Required'}
+                {hasExclusiveAccess
+                  ? 'House Notices'
+                  : user.membershipStatus === 'rejected'
+                  ? 'Status: Rejected'
+                  : 'Approval Required'}
               </div>
             </button>
 
@@ -235,7 +243,11 @@ export const MemberOverview: React.FC<MemberOverviewProps> = ({
                 {hasExclusiveAccess ? stats?.totalFiles ?? 0 : 'Locked'}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                {hasExclusiveAccess ? `${stats?.totalBytesFormatted ?? '0 B'} Stored` : 'Approval Required'}
+                {hasExclusiveAccess
+                  ? `${stats?.totalBytesFormatted ?? '0 B'} Stored`
+                  : user.membershipStatus === 'rejected'
+                  ? 'Status: Rejected'
+                  : 'Approval Required'}
               </div>
             </button>
 
@@ -328,6 +340,8 @@ export const MemberOverview: React.FC<MemberOverviewProps> = ({
             <span>
               {user.membershipStatus === 'pending'
                 ? 'Your application is currently Pending review. Announcements will appear here upon approval.'
+                : user.membershipStatus === 'rejected'
+                ? 'Your application was Rejected. Exclusive house announcements are reserved for Active members.'
                 : 'Exclusive club announcements are reserved for Active members.'}
             </span>
           </div>

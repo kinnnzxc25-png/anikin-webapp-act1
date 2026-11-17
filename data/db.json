@@ -176,7 +176,8 @@
       "isPublicInDirectory": false,
       "createdAt": "2026-11-08T10:00:00.000Z",
       "passwordHash": "1e988dda0a092c1a365f937bdef22a7afd23b0d253c09e5cdece2a150c6dd7b03b5b7da85eb1ec5e555999c3b3b4a05cb4b4062076ed436433d184d0034ef8e6",
-      "salt": "f63796c1999e4dbb9b025a4c3c4d28e8"
+      "salt": "f63796c1999e4dbb9b025a4c3c4d28e8",
+      "joinedAt": "2026-11-08T10:00:00.000Z"
     }
   ],
   "applications": [
@@ -403,6 +404,11 @@
       "token": "03857f2f1fe554e8b3fe443cf5b4fac884bc3ff9fe66398655da9e667c15609e",
       "userId": "user_rejected_1",
       "createdAt": 1794814392639
+    },
+    {
+      "token": "2e353eb31d7425411203830aca6782540c1da11ccca2188c21dd0b8d7112af7e",
+      "userId": "user_admin_1",
+      "createdAt": 1794902361302
     }
   ]
 }

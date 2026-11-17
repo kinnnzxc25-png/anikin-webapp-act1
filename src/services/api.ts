@@ -218,6 +218,12 @@ export const api = {
     });
   },
 
+  async deleteAdminMember(id: string) {
+    return this.request<{ message: string }>(`/api/admin/members/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getAdminApplications(): Promise<MembershipApplication[]> {
     const data = await this.request<{ applications: MembershipApplication[] }>('/api/admin/applications');
     return data.applications;

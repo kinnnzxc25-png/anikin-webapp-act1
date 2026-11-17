@@ -61,6 +61,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [appStatusFilter, setAppStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [reviewTiers, setReviewTiers] = useState<Record<string, MembershipTier>>({});
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Quick announcement form
   const [annTitle, setAnnTitle] = useState('');
@@ -161,6 +162,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       onRefreshGlobal();
     } catch (err: any) {
       onNotify(err.message || 'Could not update member.', 'error');
+    }
+  };
+
+  const handleDeleteMember = async (memberId: string) => {
+    try {
+      const res = await api.deleteAdminMember(memberId);
+      onNotify(res.message);
+      setConfirmDeleteId(null);
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      loadOverviewAndApps();
+      onRefreshGlobal();
+    } catch (err: any) {
+      onNotify(err.message || 'Could not remove member.', 'error');
     }
   };
 
@@ -611,7 +625,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 shrink-0">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap items-center gap-2 shrink-0">
                     <select
                       value={m.membershipStatus}
                       onChange={(e) =>
@@ -670,6 +684,34 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
                     </select>
+
+                    {m.id !== currentUser.id && (
+                      confirmDeleteId === m.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleDeleteMember(m.id)}
+                            className="px-2.5 py-1.5 text-xs rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold cursor-pointer whitespace-nowrap"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteId(m.id)}
+                          title="Remove member"
+                          aria-label={`Remove ${m.name}`}
+                          className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
               ))}
