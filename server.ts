@@ -1911,8 +1911,29 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vitePromise = import('vite').then(({ createServer }) =>
       createServer({
-        server: { middlewareMode: true, hmr: false },
+        server: { middlewareMode: true, hmr: false, ws: false },
         appType: 'spa',
+        plugins: [
+          {
+            name: 'disable-hmr-websocket-transport',
+            enforce: 'post',
+            transform(code, id) {
+              const cleanId = id.split('?')[0].replace(/\\/g, '/');
+              if (!cleanId.endsWith('/vite/dist/client/client.mjs')) return;
+              const startMarker = 'const transport = normalizeModuleRunnerTransport((() => {';
+              const endMarker = '})());';
+              const startIdx = code.indexOf(startMarker);
+              if (startIdx === -1) return;
+              const endIdx = code.indexOf(endMarker, startIdx);
+              if (endIdx === -1) return;
+              return (
+                code.slice(0, startIdx) +
+                'const transport = normalizeModuleRunnerTransport({ async connect() {}, async disconnect() {}, send() {} });' +
+                code.slice(endIdx + endMarker.length)
+              );
+            },
+          },
+        ],
       })
     );
     app.use(async (req, res, next) => {
